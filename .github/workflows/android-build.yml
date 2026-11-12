@@ -1,0 +1,40 @@
+name: Android Debug APK
+
+on:
+  push:
+    branches:
+      - feature/helper-diagnostics-custom-game
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Validate Gradle wrapper
+        run: |
+          test -f gradlew
+          test -f gradle/wrapper/gradle-wrapper.jar
+          chmod +x gradlew
+
+      - name: Assemble debug APK
+        run: ./gradlew --no-daemon clean assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamewxqrlogin-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
