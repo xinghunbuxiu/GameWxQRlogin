@@ -39,12 +39,12 @@ import com.willh.wz.menu.MenuAdapter;
 import com.willh.wz.util.CommonUtil;
 import com.willh.wz.util.FileUtil;
 import com.willh.wz.util.ImageLoaderUtil;
-import com.willh.wz.util.LoginUtil;
 import com.willh.wz.util.MenuUtil;
 import com.willh.wz.util.image.ImageUtils;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -93,7 +93,7 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
         mWebView.addJavascriptInterface(new JavaScriptInterface(), "android");
 
         getConfig();
-        getVersion();
+        initSingleGame();
     }
 
     private void initMenu(Version version) {
@@ -106,6 +106,30 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
             selectGame(mMenuList.menu.get(getConfig().getString(Constant.CONFIG_GAME, "")));
             checkVersion();
         }
+    }
+
+    /**
+     * This helper build is intentionally scoped to one verified game.
+     * It does not fetch or trust a remote game menu.
+     */
+    private void initSingleGame() {
+        mMenuList = new MenuList();
+        mMenuList.menu = new LinkedHashMap<>();
+
+        GameInfo game = new GameInfo(
+                "我的养老时光",
+                "wx779aaae0bedf9f3c",
+                "com.myretirementtime.wdylsg",
+                "com.myretirementtime.wdylsg",
+                "com.myretirementtime.wdylsg.wxapi.WXEntryActivity",
+                "使用前请确认已安装《我的养老时光》官方游戏。\n"
+                        + "本工具只负责展示微信授权二维码和检查游戏回调入口。\n"
+                        + "是否完成游戏登录，必须以游戏官方授权流程的实际结果为准。",
+                "",
+                ""
+        );
+        mMenuList.menu.put(game.name, game);
+        selectGame(game);
     }
 
     private SharedPreferences getConfig() {
@@ -276,13 +300,13 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
                 if (!TextUtils.isEmpty(url)) {
                     GameInfo gameInfo = mCurrentGame;
                     if (url.startsWith(gameInfo.appId)) {
-                        Intent intent = new Intent();
-                        intent.setAction(Intent.ACTION_VIEW);
-                        intent.setComponent(new ComponentName(gameInfo.pkg, gameInfo.cls));
-                        intent.putExtras(LoginUtil.generateBundle(url));
-                        if (isIntentSafe(intent)) {
-                            startActivity(intent);
-                        }
+                        // OAuth redirect received. Do not fabricate a WeChat SDK response
+                        // or claim that the game accepted the authorization.
+                        runOnUiThread(() -> Toast.makeText(
+                                MainActivity.this,
+                                "已收到微信授权返回；请以游戏官方登录结果为准",
+                                Toast.LENGTH_LONG
+                        ).show());
                         return true;
                     } else if (!url.startsWith("http://") && !url.startsWith("https://")) {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
