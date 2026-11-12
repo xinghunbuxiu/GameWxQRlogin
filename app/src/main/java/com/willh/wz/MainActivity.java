@@ -157,12 +157,16 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main, menu);
         mRefreshItem = menu.findItem(R.id.refresh);
+        menu.add(Menu.NONE, 9001, 100, "自定义游戏诊断");
         return super.onCreateOptionsMenu(menu);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.refresh) {
+        if (item.getItemId() == 9001) {
+            startActivity(new Intent(this, GameDiagnosticsActivity.class));
+            return true;
+        } else if (item.getItemId() == R.id.refresh) {
             if (mWebView != null) {
                 mWebView.clearHistory();
                 mWebView.loadUrl(mCurrentUrl);
