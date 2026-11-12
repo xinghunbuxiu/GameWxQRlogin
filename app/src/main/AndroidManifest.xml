@@ -16,6 +16,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Wz">
         <activity
+            android:name=".GameDiagnosticsActivity"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:configChanges=""
             android:exported="true"
