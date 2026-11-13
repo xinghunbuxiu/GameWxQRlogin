@@ -5,7 +5,7 @@
 - Supported Helpers: Android and iOS.
 - Every connection requires a fresh, explicit device-owner approval.
 - Approval expires after 90 seconds.
-- The owner can reject or terminate a session at any time.
+- The owner can reject or terminate a session at any time. After system screen-capture consent and media sender initialization, the device emits `session.ready`; only then does the viewer create and send its SDP offer. This prevents an offer from racing ahead of the device WebRTC socket.
 - The server is a control plane and signaling relay, not a remote command executor.
 
 ## Identity and device registration
