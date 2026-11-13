@@ -39,6 +39,7 @@ import com.willh.wz.menu.MenuAdapter;
 import com.willh.wz.util.CommonUtil;
 import com.willh.wz.util.FileUtil;
 import com.willh.wz.util.ImageLoaderUtil;
+import com.willh.wz.util.LoginUtil;
 import com.willh.wz.util.MenuUtil;
 import com.willh.wz.util.image.ImageUtils;
 
@@ -300,11 +301,13 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
                 if (!TextUtils.isEmpty(url)) {
                     GameInfo gameInfo = mCurrentGame;
                     if (url.startsWith(gameInfo.appId)) {
-                        // Forward the original OAuth redirect URI to the game's exported
-                        // callback Activity. Do not synthesize WeChat SDK Bundle fields.
-                        Intent callback = new Intent(Intent.ACTION_VIEW);
+                        // Preserve the upstream callback transport: ACTION_VIEW + explicit
+                        // ComponentName + Bundle extras. Only forward the real OAuth code,
+                        // state and redirect URI; do not fabricate an auth-success result.
+                        Intent callback = new Intent();
+                        callback.setAction(Intent.ACTION_VIEW);
                         callback.setComponent(new ComponentName(gameInfo.pkg, gameInfo.cls));
-                        callback.setData(Uri.parse(url));
+                        callback.putExtras(LoginUtil.generateOAuthBundle(url));
                         if (isIntentSafe(callback)) {
                             startActivity(callback);
                         } else {
