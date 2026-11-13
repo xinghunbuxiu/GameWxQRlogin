@@ -308,10 +308,10 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
                         Bundle oauthBundle = LoginUtil.generateOAuthBundle(url);
                         String code = Uri.parse(url).getQueryParameter("code");
                         String state = Uri.parse(url).getQueryParameter("state");
-                        String callbackInfo = "回调地址：\\n" + url
-                                + "\\n\\ncode：\\n" + (code == null ? "(无)" : code)
-                                + "\\n\\nstate：\\n" + (state == null ? "(无)" : state)
-                                + "\\n\\nBundle：\\n" + formatBundle(oauthBundle);
+                        String callbackInfo = "回调地址：\n" + url
+                                + "\n\ncode：\n" + (code == null ? "(无)" : code)
+                                + "\n\nstate：\n" + (state == null ? "(无)" : state)
+                                + "\n\nBundle：\n" + formatBundle(oauthBundle);
                         Log.i("GameWxQRLogin", "OAuth redirect received. uri=" + url
                                 + ", code=" + maskOAuthValue(code)
                                 + ", state=" + maskOAuthValue(state)
@@ -406,7 +406,7 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
         StringBuilder result = new StringBuilder();
         for (String key : bundle.keySet()) {
             Object value = bundle.get(key);
-            result.append(key).append(" = ").append(String.valueOf(value)).append('\\n');
+            result.append(key).append(" = ").append(String.valueOf(value)).append('\n');
         }
         return result.toString();
     }
