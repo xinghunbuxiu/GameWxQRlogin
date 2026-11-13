@@ -14,7 +14,7 @@ This Helper is being added as an isolated feature inside the existing Java appli
 
 - Identity provider login is not integrated yet. The enrollment screen currently accepts a JWT from the configured OIDC provider; production should use Authorization Code + PKCE.
 - Signaling is connected only while the Helper screen is open. A lifecycle-safe foreground service and reconnect/backoff policy are next.
-- After owner approval, the app invokes the Android system MediaProjection consent screen. A non-exported foreground service creates an ImageReader/VirtualDisplay and exposes a persistent Stop Sharing notification. Captured frames are currently closed immediately; no screen pixels are transmitted until WebRTC is integrated.
+- After owner approval, the app invokes the Android system MediaProjection consent screen. A non-exported foreground service starts WebRTC ScreenCapturerAndroid and exposes a persistent Stop Sharing notification. The service opens its own WSS ticket, initializes a PeerConnection, emits session.ready only after capture is initialized, answers the viewer SDP offer, and trickles ICE candidates. The viewer receives the screen track over DTLS-SRTP.
 - Android 6.0+ is required for AES-GCM Android Keystore credential storage. Existing app features retain their older platform support.
 
 ## Security constraints
@@ -29,5 +29,5 @@ This Helper is being added as an isolated feature inside the existing Java appli
 
 1. Replace pasted owner JWT with OIDC Authorization Code + PKCE.
 2. Move signaling into a foreground service with a persistent notification and owner-visible stop action.
-3. Replace the current screen-frame discard sink with a WebRTC video track.
+3. Add TURN credential issuance and verify P2P plus TURN fallback on real devices and restrictive networks.
 4. Add WebRTC video track and optional, allow-listed DataChannel actions.
