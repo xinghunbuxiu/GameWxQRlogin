@@ -132,7 +132,7 @@ public class RemoteCaptureService extends Service {
                                     height,
                                     15
                             );
-                            webRtcSession.start();
+                            new Thread(() -> webRtcSession.start(), "GamePilotWebRtcStart").start();
                         });
                     }
 
