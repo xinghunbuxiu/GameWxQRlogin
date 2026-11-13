@@ -40,3 +40,5 @@
 .action-message{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;margin:10px 0;border:1px solid #344762;background:#17263a;border-radius:7px;color:#a9bdd9;font-size:10px;line-height:1.6;overflow-wrap:anywhere}
 .action-message svg{flex-shrink:0;margin-top:1px;color:#83adf0}
 @media(max-width:1150px){.wireless-grid{grid-template-columns:1fr}}
+
+.disconnect-button{margin-left:8px;border:1px solid #654044;background:#2b2028;color:#e5a0a5;border-radius:6px;padding:6px 10px;font:inherit;font-size:9px;white-space:nowrap;cursor:pointer}.disconnect-button:hover{background:#3b252c;border-color:#92515a}.disconnect-button:disabled{opacity:.45;cursor:wait}
