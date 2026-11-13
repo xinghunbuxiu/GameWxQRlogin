@@ -33,8 +33,8 @@ Alternative terminal states: `rejected`, `expired`. A request expires after 90 s
 
 1. Owner registers a Helper: `POST /v1/devices/register`.
 2. Helper heartbeats: `POST /v1/devices/heartbeat`.
-3. Remote user lists owner's devices: `GET /v1/devices` (cross-user discovery/sharing ACLs are intentionally not enabled in this first cut).
-4. Authorized requester asks for a session: `POST /v1/sessions`.
+3. Owner creates a share token: `POST /v1/devices/:deviceId/invites` (1–30 day expiry). The raw token is returned once; only its hash is stored.
+4. Remote user receives the token out-of-band and asks for a session: `POST /v1/sessions` with `{ inviteToken, reason }`. The device must also have a live signaling connection.
 5. Device receives `session.requested` over `/v1/realtime` and the owner explicitly approves or rejects via `POST /v1/sessions/:id/decision`.
 6. Once approved, participants exchange WebRTC signaling messages over the authenticated WebSocket.
 7. Either participant can end the session.
@@ -49,7 +49,7 @@ The signaling relay forwards opaque SDP/ICE payloads only between the two sessio
 ## Important MVP boundaries
 
 - User identity is delegated to OIDC; account creation, recovery, MFA, and organization/team sharing are not implemented here.
-- The initial device list is owner-scoped. A production sharing/invitation ACL must be added before remote users can connect to devices belonging to other accounts.
+- Device invitations are bearer links: anyone holding a valid invite can request a session, but cannot connect until the owner approves. Add revocation UI, usage limits, and abuse controls before public launch.
 - This initial implementation keeps live WebSocket connections in one process. Multi-instance deployments need Redis/NATS pub-sub and a shared session/connection registry.
 - Rate limits, abuse reporting, retention policies, TURN credential issuance, and operational metrics are required before public launch.
 - The service intentionally has no generic shell, file browser, arbitrary app-launch, or hidden-control API.
