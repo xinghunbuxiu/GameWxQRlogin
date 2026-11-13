@@ -303,45 +303,13 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
                 if (!TextUtils.isEmpty(url)) {
                     GameInfo gameInfo = mCurrentGame;
                     if (url.startsWith(gameInfo.appId)) {
-                        // Show the actual OAuth redirect and the exact Bundle fields before
-                        // launching the game's callback. The user can cancel the hand-off.
-                        Bundle oauthBundle = LoginUtil.generateOAuthBundle(url);
-                        String code = Uri.parse(url).getQueryParameter("code");
-                        String state = Uri.parse(url).getQueryParameter("state");
-                        String callbackInfo = "回调地址：\n" + url
-                                + "\n\ncode：\n" + (code == null ? "(无)" : code)
-                                + "\n\nstate：\n" + (state == null ? "(无)" : state)
-                                + "\n\nBundle：\n" + formatBundle(oauthBundle);
-                        Log.i("GameWxQRLogin", "OAuth redirect received. uri=" + url
-                                + ", code=" + maskOAuthValue(code)
-                                + ", state=" + maskOAuthValue(state)
-                                + ", extras=" + oauthBundle);
-                        new AlertDialog.Builder(MainActivity.this)
-                                .setTitle("收到游戏授权回调")
-                                .setMessage(callbackInfo)
-                                .setCancelable(false)
-                                .setPositiveButton("确认并跳转", (dialog, which) -> {
-                                    Intent callback = new Intent();
-                                    callback.setAction(Intent.ACTION_VIEW);
-                                    callback.setComponent(new ComponentName(gameInfo.pkg, gameInfo.cls));
-                                    callback.putExtras(oauthBundle);
-                                    if (isIntentSafe(callback)) {
-                                        try {
-                                            startActivity(callback);
-                                        } catch (Exception e) {
-                                            Log.e("GameWxQRLogin", "Game callback launch failed", e);
-                                            Toast.makeText(MainActivity.this,
-                                                    "跳转失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
-                                        }
-                                    } else {
-                                        Toast.makeText(MainActivity.this,
-                                                "游戏授权回调入口不可用，请确认已安装官方游戏",
-                                                Toast.LENGTH_LONG).show();
-                                    }
-                                })
-                                .setNegativeButton("取消，不跳转", (dialog, which) ->
-                                        Log.i("GameWxQRLogin", "User cancelled game callback hand-off"))
-                                .show();
+                        Intent intent = new Intent();
+                        intent.setAction(Intent.ACTION_VIEW);
+                        intent.setComponent(new ComponentName(gameInfo.pkg, gameInfo.cls));
+                        intent.putExtras(LoginUtil.generateOAuthBundle(url));
+                        if (isIntentSafe(intent)) {
+                            startActivity(intent);
+                        }
                         return true;
                     } else if (!url.startsWith("http://") && !url.startsWith("https://")) {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
