@@ -1,6 +1,6 @@
 import Fastify, { type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -13,7 +13,10 @@ const env = z.object({
   AUTH_JWKS_URL: z.string().url(),
   AUTH_ISSUER: z.string().url(),
   AUTH_AUDIENCE: z.string().min(1),
-  DEVICE_TOKEN_PEPPER: z.string().min(32)
+  DEVICE_TOKEN_PEPPER: z.string().min(32),
+  TURN_URIS: z.string().default(""),
+  TURN_SHARED_SECRET: z.string().min(32).optional(),
+  TURN_CREDENTIAL_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(3600)
 }).parse(process.env);
 
 const db = new Pool({ connectionString: env.DATABASE_URL, max: 10, ssl: process.env.PGSSLMODE === "require" ? { rejectUnauthorized: true } : undefined });
@@ -95,6 +98,21 @@ app.post("/v1/devices/register", async (request, reply) => {
     [id, user.id, body.displayName, body.platform, body.appVersion ?? null, hashSecret(token), JSON.stringify(body.capabilities)]
   );
   return reply.code(201).send({ deviceId: id, deviceToken: token, status: "online" });
+});
+
+app.get("/v1/turn/credentials", async (request) => {
+  const principal = await requirePrincipal(request);
+  const iceServers: Array<{ urls: string[]; username?: string; credential?: string }> = [
+    { urls: ["stun:stun.l.google.com:19302"] }
+  ];
+  const turnUrls = env.TURN_URIS.split(",").map(value => value.trim()).filter(Boolean);
+  const expiresAt = Math.floor(Date.now() / 1000) + env.TURN_CREDENTIAL_TTL_SECONDS;
+  if (turnUrls.length && env.TURN_SHARED_SECRET) {
+    const username = `${expiresAt}:${principal.id}`;
+    const credential = createHmac("sha1", env.TURN_SHARED_SECRET).update(username).digest("base64");
+    iceServers.push({ urls: turnUrls, username, credential });
+  }
+  return { iceServers, expiresAt, turnEnabled: iceServers.length > 1 };
 });
 
 app.get("/v1/devices", async (request) => {
