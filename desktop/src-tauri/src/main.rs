@@ -23,6 +23,16 @@ struct AdbDevice {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdbDeviceDetails {
+    serial: String,
+    model: Option<String>,
+    android_version: Option<String>,
+    screen_resolution: Option<String>,
+    foreground_activity: Option<String>,
+}
+
 struct AdbSnapshot {
     available: bool,
     adb_path: Option<String>,
@@ -174,6 +184,33 @@ fn validate_adb_endpoint(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_device_serial(serial: &str) -> Result<(), String> {
+    if serial.is_empty() || serial.len() > 255 || serial.starts_with('-')
+        || !serial.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | ':' | '-' | '[' | ']')) {
+        return Err("设备序列号格式无效。".to_string());
+    }
+    Ok(())
+}
+
+fn output_value(output: Result<String, String>) -> Option<String> {
+    output.ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
+}
+
+#[tauri::command]
+fn get_adb_device_details(serial: String) -> Result<AdbDeviceDetails, String> {
+    validate_device_serial(&serial)?;
+    let adb = adb_executable()?;
+    let model = output_value(run_adb(&adb, &["-s", &serial, "shell", "getprop", "ro.product.model"]));
+    let android_version = output_value(run_adb(&adb, &["-s", &serial, "shell", "getprop", "ro.build.version.release"]));
+    let size_output = output_value(run_adb(&adb, &["-s", &serial, "shell", "wm", "size"]));
+    let screen_resolution = size_output.and_then(|value| value.lines().last().map(|line| line.trim().replace("Physical size: ", "").replace("Override size: ", "")));
+    let activity_output = output_value(run_adb(&adb, &["-s", &serial, "shell", "dumpsys", "activity", "activities"]));
+    let foreground_activity = activity_output.and_then(|value| value.lines()
+        .find(|line| line.contains("mResumedActivity") || line.contains("topResumedActivity"))
+        .map(|line| line.trim().to_string()));
+    Ok(AdbDeviceDetails { serial, model, android_version, screen_resolution, foreground_activity })
+}
+
 fn adb_executable() -> Result<PathBuf, String> {
     find_adb().ok_or_else(|| "未找到 ADB。请安装 Android SDK Platform-Tools，并将 adb 加入 PATH。".to_string())
 }
@@ -218,6 +255,15 @@ mod tests {
     use super::validate_adb_endpoint;
 
     #[test]
+    #[test]
+    fn validates_device_serials_without_shell_metacharacters() {
+        assert!(super::validate_device_serial("192.168.1.20:5555").is_ok());
+        assert!(super::validate_device_serial("R58M123ABC").is_ok());
+        assert!(super::validate_device_serial("-s").is_err());
+        assert!(super::validate_device_serial("device;whoami").is_err());
+        assert!(super::validate_device_serial("device name").is_err());
+    }
+
     fn accepts_ipv4_and_hostname_endpoints() {
         assert!(validate_adb_endpoint("192.168.1.20:37123").is_ok());
         assert!(validate_adb_endpoint("android-device.local:5555").is_ok());
@@ -250,7 +296,7 @@ mod tests {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect])
+        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details])
         .run(tauri::generate_context!())
         .expect("error while running GamePilot");
 }
