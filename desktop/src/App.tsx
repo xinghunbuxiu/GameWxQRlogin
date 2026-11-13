@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { Activity, AlertCircle, Bot, Cable, CheckCircle2, CircleHelp, Command, Gamepad2, KeyRound, LayoutDashboard, Link2, ListChecks, LoaderCircle, MonitorSmartphone, Plus, RefreshCw, Settings2, ShieldCheck, Smartphone, TerminalSquare, Wifi } from "lucide-react";
 
 type Section = "overview" | "devices" | "tasks" | "scripts" | "logs" | "settings";
@@ -24,7 +25,7 @@ function App() {
   const [pairAddress, setPairAddress] = useState("");
   const [pairingCode, setPairingCode] = useState("");
   const [connectAddress, setConnectAddress] = useState("");
-  const [actionBusy, setActionBusy] = useState<"pair" | "connect" | "disconnect" | "launch" | null>(null);
+  const [actionBusy, setActionBusy] = useState<"pair" | "connect" | "disconnect" | "launch" | "install" | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [deviceDetails, setDeviceDetails] = useState<DeviceDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -92,6 +93,26 @@ function App() {
     }
   };
 
+  const installTargetGame = async (serial: string) => {
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Android APK", extensions: ["apk"] }]
+    });
+    if (typeof selected !== "string") return;
+    setActionBusy("install");
+    setActionMessage(null);
+    try {
+      const result = await invoke<string>("install_target_game", { serial, apkPath: selected });
+      setActionMessage(result);
+      await refreshDevices();
+    } catch (error) {
+      setActionMessage("安装失败：" + String(error));
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
   const launchTargetGame = async (serial: string) => {
     setActionBusy("launch");
     setActionMessage(null);
@@ -148,7 +169,7 @@ function App() {
           </div>
           <div className="section-grid">
             <div className="panel"><div className="panel-title"><div><h2>设备列表</h2><p>ADB 实时发现结果</p></div><button className="text-button" onClick={() => setSection("devices")}>查看全部 →</button></div>
-              {snapshot?.devices.length ? <DeviceList devices={snapshot.devices.slice(0, 4)} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} onLaunch={launchTargetGame} busy={actionBusy === "disconnect" || actionBusy === "launch"}/> : <div className="empty-state"><div className="empty-icon"><Cable size={24}/></div><b>{snapshot?.available ? "还没有连接设备" : "尚未找到 ADB"}</b><span>{snapshot?.available ? "通过 USB 调试或无线调试连接手机，也可以接入 Android 模拟器。" : "安装 Android SDK Platform-Tools，并将 adb 加入 PATH 后刷新。"}</span><button className="secondary" onClick={() => setSection("devices")}>设备连接说明</button></div>}
+              {snapshot?.devices.length ? <DeviceList devices={snapshot.devices.slice(0, 4)} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} onLaunch={launchTargetGame} onInstall={installTargetGame} busy={actionBusy !== null}/> : <div className="empty-state"><div className="empty-icon"><Cable size={24}/></div><b>{snapshot?.available ? "还没有连接设备" : "尚未找到 ADB"}</b><span>{snapshot?.available ? "通过 USB 调试或无线调试连接手机，也可以接入 Android 模拟器。" : "安装 Android SDK Platform-Tools，并将 adb 加入 PATH 后刷新。"}</span><button className="secondary" onClick={() => setSection("devices")}>设备连接说明</button></div>}
             </div>
             <div className="panel"><div className="panel-title"><div><h2>快速开始</h2><p>完成自动化运行前的准备</p></div></div><div className="steps"><Step n="01" title="连接 Android 设备" desc="ADB / 无线调试" done={onlineCount > 0}/><Step n="02" title="授权自动化能力" desc="无障碍服务 / 可选 Shizuku" done={false}/><Step n="03" title="配置游戏适配器" desc="我的养老时光" done={false}/><Step n="04" title="创建并运行任务" desc="识别、操作、验证、记录" done={false}/></div></div>
           </div>
@@ -178,7 +199,7 @@ function App() {
           {actionMessage && <div className="action-message"><AlertCircle size={14}/><span>{actionMessage}</span></div>}
           {detailsLoading && <div className="action-message"><LoaderCircle size={14} className="spin"/>正在读取设备信息…</div>}
           {deviceDetails && <div className="details-panel"><div className="panel-title"><div><h2>设备详情</h2><p>{deviceDetails.serial}</p></div><button className="text-button" onClick={() => setDeviceDetails(null)}>收起</button></div><div className="details-grid"><Detail label="设备型号" value={deviceDetails.model}/><Detail label="Android 版本" value={deviceDetails.androidVersion}/><Detail label="屏幕分辨率" value={deviceDetails.screenResolution}/><Detail label="前台 Activity" value={deviceDetails.foregroundActivity}/></div></div>}
-          {snapshot?.devices.length ? <DeviceList devices={snapshot.devices} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} onLaunch={launchTargetGame} busy={actionBusy !== null}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或按上方步骤完成无线配对和连接。"}</span></div>}
+          {snapshot?.devices.length ? <DeviceList devices={snapshot.devices} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} onLaunch={launchTargetGame} onInstall={installTargetGame} busy={actionBusy !== null}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或按上方步骤完成无线配对和连接。"}</span></div>}
           <div className="callout"><b>连接提示</b><span>USB：手机开启开发者选项和 USB 调试，连接电脑并在手机上确认 RSA 授权。</span><span>无线：配对端口与连接端口不同；先配对，再使用手机页面显示的连接端口执行连接。</span><span>安全：配对码仅用于本次配对，不持久化；所有操作均通过固定 ADB 子命令执行，不提供任意 Shell。</span></div>
         </div> : <div className="panel section-placeholder"><div className="empty-icon">{(() => { const Icon = current.icon; return <Icon size={25}/>; })()}</div><h2>{current.label}模块</h2><p>页面骨架已建立，等待对应设备服务和数据接口接入。</p></div>}
       </section>
@@ -186,10 +207,10 @@ function App() {
   </div>;
 }
 
-function DeviceList({ devices, onDisconnect, onDetails, onLaunch, busy = false }: { devices: AdbDevice[]; onDisconnect?: (serial: string) => void; onDetails?: (serial: string) => void; onLaunch?: (serial: string) => void; busy?: boolean }) {
+function DeviceList({ devices, onDisconnect, onDetails, onLaunch, onInstall, busy = false }: { devices: AdbDevice[]; onDisconnect?: (serial: string) => void; onDetails?: (serial: string) => void; onLaunch?: (serial: string) => void; onInstall?: (serial: string) => void; busy?: boolean }) {
   return <div className="device-list">{devices.map(device => {
     const wireless = device.serial.includes(":");
-    return <div className="device-row" key={device.serial}><div className="device-icon"><Smartphone size={18}/></div><div className="device-main"><b>{device.model ?? device.device ?? device.serial}</b><small>{device.serial}{device.product ? " · " + device.product : ""}</small></div><span className={device.state === "device" ? "device-state connected" : "device-state"}>{device.state === "device" ? <><CheckCircle2 size={13}/> 已授权</> : device.state === "unauthorized" ? "待授权" : device.state === "offline" ? "离线" : device.state}</span>{onDetails && device.state === "device" && <button className="details-button" type="button" onClick={() => onDetails(device.serial)}>详情</button>}{onLaunch && device.state === "device" && <button className="launch-button" type="button" disabled={busy} onClick={() => onLaunch(device.serial)}>启动游戏</button>}{wireless && onDisconnect && <button className="disconnect-button" type="button" disabled={busy} onClick={() => onDisconnect(device.serial)}>断开</button>}</div>;
+    return <div className="device-row" key={device.serial}><div className="device-icon"><Smartphone size={18}/></div><div className="device-main"><b>{device.model ?? device.device ?? device.serial}</b><small>{device.serial}{device.product ? " · " + device.product : ""}</small></div><span className={device.state === "device" ? "device-state connected" : "device-state"}>{device.state === "device" ? <><CheckCircle2 size={13}/> 已授权</> : device.state === "unauthorized" ? "待授权" : device.state === "offline" ? "离线" : device.state}</span>{onDetails && device.state === "device" && <button className="details-button" type="button" disabled={busy} onClick={() => onDetails(device.serial)}>详情</button>}{onInstall && device.state === "device" && <button className="install-button" type="button" disabled={busy} onClick={() => onInstall(device.serial)}>安装 APK</button>}{onLaunch && device.state === "device" && <button className="launch-button" type="button" disabled={busy} onClick={() => onLaunch(device.serial)}>启动游戏</button>}{wireless && onDisconnect && <button className="disconnect-button" type="button" disabled={busy} onClick={() => onDisconnect(device.serial)}>断开</button>}</div>;
   })}</div>;
 }
 function Detail({ label, value }: { label: string; value: string | null }) {
