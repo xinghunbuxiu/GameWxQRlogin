@@ -16,6 +16,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Wz">
         <activity
+            android:name=".RemoteHelperActivity"
+            android:exported="false"
+            android:label="GamePilot 设备接入" />
+        <activity
             android:name=".GameDiagnosticsActivity"
             android:exported="false" />
         <activity
