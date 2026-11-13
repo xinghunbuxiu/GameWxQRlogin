@@ -84,6 +84,7 @@ async function record(sessionId: string, actorId: string, type: string, metadata
 app.get("/health", async () => ({ ok: true, service: "gamepilot-remote", version: "0.1.0" }));
 
 app.post("/v1/devices/register", async (request, reply) => {
+  reply.header("Cache-Control", "no-store");
   const user = await requirePrincipal(request, "user");
   const body = z.object({
     displayName: z.string().trim().min(1).max(80),
@@ -100,7 +101,8 @@ app.post("/v1/devices/register", async (request, reply) => {
   return reply.code(201).send({ deviceId: id, deviceToken: token, status: "online" });
 });
 
-app.get("/v1/turn/credentials", async (request) => {
+app.get("/v1/turn/credentials", async (request, reply) => {
+  reply.header("Cache-Control", "no-store");
   const principal = await requirePrincipal(request);
   const iceServers: Array<{ urls: string[]; username?: string; credential?: string }> = [
     { urls: ["stun:stun.l.google.com:19302"] }
@@ -143,6 +145,7 @@ app.post("/v1/devices/heartbeat", async (request) => {
 });
 
 app.post("/v1/devices/:deviceId/invites", async (request, reply) => {
+  reply.header("Cache-Control", "no-store");
   const user = await requirePrincipal(request, "user");
   const params = z.object({ deviceId: z.string().uuid() }).parse(request.params);
   const body = z.object({ expiresInDays: z.number().int().min(1).max(30).default(7) }).parse(request.body ?? {});
@@ -224,6 +227,7 @@ app.post("/v1/sessions/:sessionId/end", async (request) => {
 });
 
 app.post("/v1/realtime/ticket", async (request, reply) => {
+  reply.header("Cache-Control", "no-store");
   const principal = await requirePrincipal(request);
   const ticket = "gp_ws_" + randomBytes(32).toString("base64url");
   await db.query(
