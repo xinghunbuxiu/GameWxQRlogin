@@ -55,7 +55,7 @@ WebSocket messages use JSON envelopes:
 - `{ type: "session.started", sessionId }`
 - `{ type: "session.ended", sessionId }`
 
-The signaling relay forwards opaque SDP/ICE payloads only between the two session participants and only after approval. WebSocket tickets are single-use and expire after 30 seconds, so browser clients do not need to set a non-standard Authorization header. It does not inspect or store media. WebRTC media encryption is provided by DTLS-SRTP; deploy TURN with authenticated, short-lived credentials before production.
+The signaling relay forwards opaque SDP/ICE payloads only between the two session participants and only after approval. WebSocket tickets are single-use and expire after 30 seconds, so browser clients do not need to set a non-standard Authorization header. The ticket is carried in the WSS query string; configure reverse-proxy access logs to omit or redact query strings on `/v1/realtime` so tickets are not retained in proxy logs. It does not inspect or store media. WebRTC media encryption is provided by DTLS-SRTP; deploy TURN with authenticated, short-lived credentials before production.
 
 ## Important MVP boundaries
 
