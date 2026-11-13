@@ -16,3 +16,15 @@ services:
       retries: 10
 volumes:
   gamepilot_pg:
+  server:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://gamepilot:change-me-local-only@postgres:5432/gamepilot
+      PGSSLMODE: disable
+    ports:
+      - "8787:8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
