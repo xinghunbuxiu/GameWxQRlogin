@@ -257,7 +257,7 @@ public class RemoteHelperActivity extends Activity {
             service.putExtra(RemoteCaptureService.EXTRA_SESSION_ID, sessionId);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(service);
             else startService(service);
-            setStatus("系统屏幕采集已启动，通知栏可随时停止。当前版本尚未通过 WebRTC 传输画面。");
+            setStatus("屏幕共享已启动，正在建立 WebRTC 连接。连接成功后桌面端即可观看画面；通知栏可随时停止。");
         } else if (sessionId != null) {
             setStatus("你取消了系统屏幕共享授权，正在结束本次会话。");
             executor.execute(() -> {
