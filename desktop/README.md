@@ -7,21 +7,30 @@ Tauri 2 + React + TypeScript desktop control center.
 ```bash
 cd desktop
 npm install
+npm run dev
+```
+
+Run the Tauri desktop shell:
+
+```bash
+cd desktop
 npm run tauri dev
 ```
 
-## Build
+## ADB device discovery
 
-```bash
-npm run tauri build
-```
+The desktop backend searches for `adb` in this order:
 
-## Architecture boundary
+1. `ANDROID_SDK_ROOT/platform-tools`
+2. `ANDROID_HOME/platform-tools`
+3. Directories in `PATH`
 
-- React: presentation, device/task views, workflow editor and log viewer.
-- Tauri/Rust: desktop host, local process lifecycle, secure command boundary.
-- Android Kotlin companion: device-side execution, AccessibilityService, optional Shizuku integration, screen capture and OCR.
-- ADB: device transport and diagnostics. Shizuku is an optional Android privilege bridge, not an ADB replacement.
-- WebSocket protocol: authenticated local control channel between desktop and Android companion.
+Install Android SDK Platform-Tools and ensure the Android device has USB debugging enabled. For a first USB connection, confirm the RSA debugging authorization prompt on the phone.
 
-The initial UI is intentionally a disconnected-state prototype. It does not report fake devices or claim that ADB/automation is connected.
+The current backend exposes one typed Tauri command, `get_adb_snapshot`. It runs only `adb version` and `adb devices -l`, with an 8-second process timeout. It does not expose arbitrary shell execution, install, launch, or device mutation commands.
+
+Wireless pairing/connect, device actions, Android companion pairing, task execution, accessibility automation, and screen streaming are not implemented yet.
+
+## CI
+
+GitHub Actions validates the React/TypeScript production build and runs `cargo check` for the Tauri Rust backend on Ubuntu.
