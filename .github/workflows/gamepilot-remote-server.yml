@@ -40,3 +40,9 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: node tests/run-db-invariants.mjs
+      - name: Validate Docker Compose configuration
+        run: |
+          cp .env.example .env
+          POSTGRES_PASSWORD=ci-only-random-password docker compose config --quiet
+      - name: Build production container image
+        run: docker build -t gamepilot-remote-server:ci .
