@@ -2,6 +2,10 @@
 
 This directory contains the first native iOS Helper source: Keychain credential storage, HTTPS API client, approval UI, WSS request listener, ReplayKit picker, and Broadcast Upload Extension lifecycle. It is not yet a complete Xcode project or a working WebRTC sender.
 
+## WebRTC dependency
+
+A local Swift Package manifest is provided at `Packages/WebRTC/Package.swift`. It pins the WebRTC SDK 150.7871.04 XCFramework and its SHA-256 package checksum. Add this local package to both the app and Broadcast Extension targets in Xcode.
+
 ## Xcode target setup
 
 1. Create an iOS app target named GamePilotHelper (deployment target iOS 15 or later).
@@ -22,7 +26,7 @@ This directory contains the first native iOS Helper source: Keychain credential 
 
 1. Replace the pasted owner JWT with OIDC Authorization Code + PKCE in the containing app; the device credential is already stored in Keychain.
 2. Implement the same one-time WSS ticket protocol as Android.
-3. Add a reviewed WebRTC iOS dependency and create an RTCVideoSource / RTCVideoTrack adapter for ReplayKit sample buffers.
+3. Add the pinned local Swift package at Packages/WebRTC (WebRTC SDK 150.7871.04) to both app and Broadcast Extension targets; implement an RTCVideoSource / RTCVideoTrack adapter for ReplayKit sample buffers.
 4. Add owner approval UI before presenting the ReplayKit broadcast picker.
 5. Test broadcast interruption, app/extension termination, lock screen behavior, and TURN fallback.
 
