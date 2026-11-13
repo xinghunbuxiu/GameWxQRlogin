@@ -250,7 +250,7 @@ fn install_target_game(serial: String, apk_path: String) -> Result<String, Strin
 fn launch_target_game(serial: String) -> Result<String, String> {
     validate_device_serial(&serial)?;
     let adb = adb_executable()?;
-    let output = run_adb(&adb, &["-s", &serial, "shell", "monkey", "-p", "com.myretirementtime.wdylsg", "1"])?;
+    let output = run_adb(&adb, &["-s", &serial, "shell", "monkey", "-p", TARGET_GAME_PACKAGE, "1"])?;
     let message = output.trim();
     Ok(if message.is_empty() { "已发送启动《我的养老时光》指令。".to_string() } else { message.to_string() })
 }
