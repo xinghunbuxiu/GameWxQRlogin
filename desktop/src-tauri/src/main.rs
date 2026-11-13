@@ -2,12 +2,15 @@
 
 use serde::Serialize;
 use std::{
+    collections::HashMap,
     env,
     io::Read,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::{Child, Command, Stdio},
+    sync::Mutex,
     time::Duration,
 };
+use tauri::State;
 use wait_timeout::ChildExt;
 
 const TARGET_GAME_PACKAGE: &str = "com.myretirementtime.wdylsg";
@@ -43,12 +46,55 @@ struct AdbSnapshot {
     error: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScrcpyStatus {
+    available: bool,
+    path: Option<String>,
+    running_serials: Vec<String>,
+}
+
+#[derive(Default)]
+struct ScrcpyProcessManager {
+    children: Mutex<HashMap<String, Child>>,
+}
+
+impl Drop for ScrcpyProcessManager {
+    fn drop(&mut self) {
+        if let Ok(children) = self.children.get_mut() {
+            for child in children.values_mut() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+}
+
 fn adb_name() -> &'static str {
     if cfg!(target_os = "windows") { "adb.exe" } else { "adb" }
 }
 
 fn is_executable_file(path: &Path) -> bool {
     path.is_file()
+}
+
+fn scrcpy_name() -> &'static str {
+    if cfg!(target_os = "windows") { "scrcpy.exe" } else { "scrcpy" }
+}
+
+fn find_scrcpy() -> Option<PathBuf> {
+    if let Some(configured) = env::var_os("SCRCPY_PATH") {
+        let candidate = PathBuf::from(configured);
+        if is_executable_file(&candidate) { return Some(candidate); }
+    }
+    let name = scrcpy_name();
+    if let Some(path) = env::var_os("PATH") {
+        for directory in env::split_paths(&path) {
+            let candidate = directory.join(name);
+            if is_executable_file(&candidate) { return Some(candidate); }
+        }
+    }
+    None
 }
 
 fn find_adb() -> Option<PathBuf> {
@@ -114,6 +160,65 @@ fn run_adb(adb: &Path, args: &[&str]) -> Result<String, String> {
     run_adb_with_timeout(adb, args, Duration::from_secs(8))
 }
 
+
+#[tauri::command]
+fn get_scrcpy_status(manager: State<'_, ScrcpyProcessManager>) -> ScrcpyStatus {
+    let running_serials = manager.children.lock().map(|mut children| {
+        children.retain(|_, child| child.try_wait().ok().flatten().is_none());
+        children.keys().cloned().collect()
+    }).unwrap_or_default();
+    let path = find_scrcpy();
+    ScrcpyStatus {
+        available: path.is_some(),
+        path: path.map(|value| value.display().to_string()),
+        running_serials,
+    }
+}
+
+#[tauri::command]
+fn start_scrcpy(serial: String, manager: State<'_, ScrcpyProcessManager>) -> Result<String, String> {
+    validate_device_serial(&serial)?;
+    let adb = adb_executable()?;
+    let devices_output = run_adb(&adb, &["devices", "-l"])?;
+    let authorized = parse_devices(&devices_output).iter()
+        .any(|device| device.serial == serial && device.state == "device");
+    if !authorized {
+        return Err("目标设备当前未处于 ADB 已授权状态，请刷新设备列表后重试。".to_string());
+    }
+    let scrcpy = find_scrcpy().ok_or_else(|| "未找到 scrcpy。请安装官方 scrcpy，并将其加入 PATH，或设置 SCRCPY_PATH。".to_string())?;
+
+    let mut children = manager.children.lock().map_err(|_| "scrcpy 进程管理器不可用。")?;
+    if let Some(child) = children.get_mut(&serial) {
+        if child.try_wait().map_err(|error| format!("检查 scrcpy 进程失败：{error}"))?.is_none() {
+            return Ok("该设备的 scrcpy 投屏窗口已经运行。".to_string());
+        }
+    }
+    children.remove(&serial);
+
+    let title = format!("GamePilot - {serial}");
+    let child = Command::new(scrcpy)
+        .args(["--serial", &serial, "--window-title", &title])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|error| format!("启动 scrcpy 失败：{error}"))?;
+    children.insert(serial.clone(), child);
+    Ok(format!("已为设备 {serial} 启动 scrcpy 投屏窗口。"))
+}
+
+#[tauri::command]
+fn stop_scrcpy(serial: String, manager: State<'_, ScrcpyProcessManager>) -> Result<String, String> {
+    validate_device_serial(&serial)?;
+    let mut children = manager.children.lock().map_err(|_| "scrcpy 进程管理器不可用。")?;
+    if let Some(mut child) = children.remove(&serial) {
+        let _ = child.kill();
+        let _ = child.wait();
+        Ok(format!("已停止设备 {serial} 的 scrcpy 投屏。"))
+    } else {
+        Ok("该设备当前没有由 GamePilot 启动的 scrcpy 进程。".to_string())
+    }
+}
 
 fn parse_devices(output: &str) -> Vec<AdbDevice> {
     output.lines().skip_while(|line| !line.starts_with("List of devices")).skip(1)
@@ -411,8 +516,9 @@ mod tests {
 
 fn main() {
     tauri::Builder::default()
+        .manage(ScrcpyProcessManager::default())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details, launch_target_game, install_target_game, uninstall_target_game])
+        .invoke_handler(tauri::generate_handler![get_adb_snapshot, get_scrcpy_status, start_scrcpy, stop_scrcpy, adb_pair, adb_connect, adb_disconnect, get_adb_device_details, launch_target_game, install_target_game, uninstall_target_game])
         .run(tauri::generate_context!())
         .expect("error while running GamePilot");
 }
