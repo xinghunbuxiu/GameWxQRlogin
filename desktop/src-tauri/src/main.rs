@@ -101,7 +101,7 @@ fn run_adb_with_timeout(adb: &Path, args: &[&str], timeout: Duration) -> Result<
             let _ = child.wait();
             if let Some(handle) = stdout_reader { let _ = handle.join(); }
             if let Some(handle) = stderr_reader { let _ = handle.join(); }
-            Err("ADB 命令超时（8 秒）".to_string())
+            Err(format!("ADB 命令超时（{} 秒）", timeout.as_secs()))
         }
     }
 }
@@ -208,6 +208,14 @@ fn validate_device_serial(serial: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_apk_extension(path: &Path) -> Result<(), String> {
+    if path.extension().and_then(|value| value.to_str()).map(|value| value.eq_ignore_ascii_case("apk")).unwrap_or(false) {
+        Ok(())
+    } else {
+        Err("请选择 .apk 格式的安装文件。".to_string())
+    }
+}
+
 fn output_value(output: Result<String, String>) -> Option<String> {
     output.ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
 }
@@ -216,9 +224,7 @@ fn output_value(output: Result<String, String>) -> Option<String> {
 fn install_target_game(serial: String, apk_path: String) -> Result<String, String> {
     validate_device_serial(&serial)?;
     let path = PathBuf::from(&apk_path);
-    if path.extension().and_then(|value| value.to_str()).map(|value| !value.eq_ignore_ascii_case("apk")).unwrap_or(true) {
-        return Err("请选择 .apk 格式的安装文件。".to_string());
-    }
+    validate_apk_extension(&path)?;
     if !path.is_file() {
         return Err("APK 文件不存在或不是普通文件。".to_string());
     }
@@ -309,6 +315,14 @@ mod tests {
         assert!(super::validate_device_serial("device name").is_err());
     }
 
+    #[test]
+    fn accepts_only_apk_file_extensions() {
+        assert!(super::validate_apk_extension(std::path::Path::new("/tmp/game.apk")).is_ok());
+        assert!(super::validate_apk_extension(std::path::Path::new("/tmp/game.APK")).is_ok());
+        assert!(super::validate_apk_extension(std::path::Path::new("/tmp/game.zip")).is_err());
+        assert!(super::validate_apk_extension(std::path::Path::new("/tmp/game")).is_err());
+    }
+
     fn accepts_ipv4_and_hostname_endpoints() {
         assert!(validate_adb_endpoint("192.168.1.20:37123").is_ok());
         assert!(validate_adb_endpoint("android-device.local:5555").is_ok());
@@ -341,6 +355,7 @@ mod tests {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details, launch_target_game, install_target_game])
         .run(tauri::generate_context!())
         .expect("error while running GamePilot");
