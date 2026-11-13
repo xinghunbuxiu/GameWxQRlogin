@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Activity, Bot, Cable, CircleHelp, Command, Gamepad2, LayoutDashboard, ListChecks, MonitorSmartphone, Play, Plus, Settings2, ShieldCheck, Smartphone, TerminalSquare, Wifi } from "lucide-react";
 
 type Section = "overview" | "devices" | "tasks" | "scripts" | "logs" | "settings";
@@ -45,13 +45,13 @@ function App() {
             <div className="panel"><div className="panel-title"><div><h2>快速开始</h2><p>完成自动化运行前的准备</p></div></div><div className="steps"><Step n="01" title="连接 Android 设备" desc="ADB / 无线调试" done={false}/><Step n="02" title="授权自动化能力" desc="无障碍服务 / 可选 Shizuku" done={false}/><Step n="03" title="配置游戏适配器" desc="我的养老时光" done={false}/><Step n="04" title="创建并运行任务" desc="识别、操作、验证、记录" done={false}/></div></div>
           </div>
           <div className="panel bottom-panel"><div className="panel-title"><div><h2>系统模块</h2><p>桌面端负责编排，Android 执行端负责设备操作</p></div></div><div className="module-grid"><Module icon={<Command/>} title="ADB 设备通道" desc="连接、安装、启动与日志"/><Module icon={<ShieldCheck/>} title="Shizuku 增强" desc="可选系统 API 授权"/><Module icon={<Bot/>} title="自动化引擎" desc="无障碍与任务状态机"/><Module icon={<Activity/>} title="视觉识别" desc="截图、OCR 与图像匹配"/></div></div>
-        </> : <div className="panel section-placeholder"><div className="empty-icon"><current.icon size={25}/></div><h2>{current.label}模块</h2><p>页面骨架已建立，等待对应设备服务和数据接口接入。</p>{section === "devices" && <div className="callout"><b>连接方式规划</b><span>USB ADB · 无线 ADB · 模拟器 ADB</span><span>Shizuku 作为 Android 端可选增强，不作为连接设备的替代品。</span></div>}</div>}
+        </> : <div className="panel section-placeholder"><div className="empty-icon">{(() => { const Icon = current.icon; return <Icon size={25}/>; })()}</div><h2>{current.label}模块</h2><p>页面骨架已建立，等待对应设备服务和数据接口接入。</p>{section === "devices" && <div className="callout"><b>连接方式规划</b><span>USB ADB · 无线 ADB · 模拟器 ADB</span><span>Shizuku 作为 Android 端可选增强，不作为连接设备的替代品。</span></div>}</div>}
       </section>
     </main>
   </div>;
 }
 
-function Stat({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
+function Stat({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) {
   return <div className="stat-card"><div className="stat-top"><span>{label}</span><i>{icon}</i></div><strong>{value}</strong><small>{detail}</small></div>;
 }
 function Step({ n, title, desc, done }: { n: string; title: string; desc: string; done: boolean }) {
