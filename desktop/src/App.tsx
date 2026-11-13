@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Activity, AlertCircle, Bot, Cable, CheckCircle2, CircleHelp, Command, Gamepad2, KeyRound, LayoutDashboard, Link2, ListChecks, LoaderCircle, Monitor, MonitorSmartphone, Plus, RefreshCw, Settings2, ShieldCheck, Smartphone, TerminalSquare, Wifi } from "lucide-react";
@@ -23,6 +23,7 @@ function App() {
   const [snapshot, setSnapshot] = useState<AdbSnapshot | null>(null);
   const [scrcpyStatus, setScrcpyStatus] = useState<ScrcpyStatus | null>(null);
   const [mirrorBusySerial, setMirrorBusySerial] = useState<string | null>(null);
+  const scrcpyStatusPolling = useRef(false);
   const [loading, setLoading] = useState(false);
   const [lastChecked, setLastChecked] = useState<string | null>(null);
   const [pairAddress, setPairAddress] = useState("");
@@ -50,11 +51,15 @@ function App() {
   }, []);
 
   const refreshScrcpyStatus = useCallback(async () => {
+    if (scrcpyStatusPolling.current) return;
+    scrcpyStatusPolling.current = true;
     try {
       const result = await invoke<ScrcpyStatus>("get_scrcpy_status");
       setScrcpyStatus(result);
     } catch {
       setScrcpyStatus({ available: false, path: null, runningSerials: [] });
+    } finally {
+      scrcpyStatusPolling.current = false;
     }
   }, []);
 
@@ -62,6 +67,15 @@ function App() {
     void refreshDevices();
     void refreshScrcpyStatus();
   }, [refreshDevices, refreshScrcpyStatus]);
+
+  // Keep the UI in sync when a user closes a scrcpy window directly,
+  // or when Android/ADB disconnects and scrcpy exits on its own.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refreshScrcpyStatus();
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [refreshScrcpyStatus]);
 
 
   const pairWirelessDevice = async () => {
