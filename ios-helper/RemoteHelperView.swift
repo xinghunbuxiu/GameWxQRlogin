@@ -91,7 +91,7 @@ struct RemoteHelperView: View {
             components.path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/v1/realtime"
             components.queryItems = [URLQueryItem(name: "ticket", value: ticket.ticket)]
             guard let url = components.url else { throw URLError(.badURL) }
-            let task = URLSession.shared.webSocketTask(with: url)
+            let task = RemoteAPIClient.makeWebSocketTask(url: url)
             socket = task
             task.resume()
             status = "已连接云端，等待设备主人审批请求。"
