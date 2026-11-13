@@ -16,7 +16,7 @@ const env = z.object({
   DEVICE_TOKEN_PEPPER: z.string().min(32),
   TURN_URIS: z.string().default(""),
   TURN_SHARED_SECRET: z.string().min(32).optional(),
-  TURN_CREDENTIAL_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(3600)
+  TURN_CREDENTIAL_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(14400)
 }).parse(process.env);
 
 const db = new Pool({ connectionString: env.DATABASE_URL, max: 10, ssl: process.env.PGSSLMODE === "require" ? { rejectUnauthorized: true } : undefined });
