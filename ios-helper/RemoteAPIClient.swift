@@ -7,7 +7,21 @@ struct RemoteRegistration: Decodable {
 
 struct RemoteTicket: Decodable { let ticket: String }
 
+private final class RedirectBlocker: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
+    }
+}
+
 enum RemoteAPIClient {
+    private static let httpSession = URLSession(
+        configuration: .ephemeral,
+        delegate: RedirectBlocker(),
+        delegateQueue: nil
+    )
     static func register(serverURL: String, ownerJWT: String, displayName: String) async throws -> RemoteRegistration {
         let body: [String: Any] = [
             "displayName": displayName,
@@ -44,7 +58,7 @@ enum RemoteAPIClient {
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await httpSession.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String ?? "HTTP_ERROR"
             throw NSError(domain: "GamePilotRemote", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "服务器请求失败：\(code)"])
