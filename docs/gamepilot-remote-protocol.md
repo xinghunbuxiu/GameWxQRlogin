@@ -31,7 +31,7 @@ The server must reject signaling unless the session is approved or active. Every
 
 ## WebRTC topology
 
-- WebSocket is used only for authenticated signaling and lifecycle events.
+- WebSocket is used only for authenticated signaling and lifecycle events. Clients obtain a single-use 30-second ticket over authenticated HTTPS, then connect with that ticket; browser WebSocket clients do not rely on custom Authorization headers.
 - WebRTC carries screen video and (where platform policy permits) a DataChannel.
 - STUN is attempted first. TURN/TLS is the fallback for restrictive NAT/firewalls.
 - Use short-lived TURN credentials; never embed permanent TURN secrets in a Helper.
