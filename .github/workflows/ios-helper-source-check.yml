@@ -1,0 +1,23 @@
+name: GamePilot iOS Swift Source Check
+on:
+  push:
+    branches: [feature/gamepilot-cloud-remote-mvp]
+    paths:
+      - "ios-helper/**/*.swift"
+      - ".github/workflows/ios-helper-source-check.yml"
+  pull_request:
+    paths:
+      - "ios-helper/**/*.swift"
+      - ".github/workflows/ios-helper-source-check.yml"
+  workflow_dispatch:
+jobs:
+  parse:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Swift syntax
+        run: |
+          swiftc -frontend -parse ios-helper/RemoteDeviceCredentialStore.swift
+          swiftc -frontend -parse ios-helper/RemoteAPIClient.swift
+          swiftc -frontend -parse ios-helper/RemoteHelperView.swift
+          swiftc -frontend -parse ios-helper/ReplayKitBroadcast/SampleHandler.swift
