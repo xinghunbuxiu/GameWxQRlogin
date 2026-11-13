@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/helper-diagnostics-custom-game
+      - feature/gamepilot-cloud-remote-mvp
   workflow_dispatch:
 
 permissions:
