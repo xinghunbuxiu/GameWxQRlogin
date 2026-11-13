@@ -29,7 +29,13 @@ Install Android SDK Platform-Tools and ensure the Android device has USB debuggi
 
 The current backend exposes one typed Tauri command, `get_adb_snapshot`. It runs only `adb version` and `adb devices -l`, with an 8-second process timeout. It does not expose arbitrary shell execution, install, launch, or device mutation commands.
 
-Wireless pairing/connect, device actions, Android companion pairing, task execution, accessibility automation, and screen streaming are not implemented yet.
+Wireless ADB pairing and connect are available in the Devices page:
+- Pair with the temporary pairing address and numeric pairing code shown by Android Wireless Debugging.
+- Connect with the separate IP address and connection port shown on the Wireless Debugging screen.
+- The pairing code is passed only to the one-time `adb pair` process, is not persisted, and is redacted from returned error text.
+- Endpoint input is validated before being passed as individual process arguments; no shell is involved.
+
+Disconnect controls, device install/launch actions, Android companion pairing, task execution, accessibility automation, and screen streaming are not implemented yet.
 
 ## CI
 
