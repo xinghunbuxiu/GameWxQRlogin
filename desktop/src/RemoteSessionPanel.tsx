@@ -198,7 +198,7 @@ export default function RemoteSessionPanel() {
       const ticket = await api<TicketResponse>("/v1/realtime/ticket", "POST", {});
       const wsUrl = new URL(baseUrl());
       wsUrl.protocol = "wss:";
-      wsUrl.pathname = wsUrl.pathname.replace(/\\/+$/, "") + "/v1/realtime";
+      wsUrl.pathname = wsUrl.pathname.replace(/\/+$/, "") + "/v1/realtime";
       wsUrl.search = new URLSearchParams({ ticket: ticket.ticket }).toString();
       socket = new WebSocket(wsUrl.toString());
       socketRef.current = socket;
