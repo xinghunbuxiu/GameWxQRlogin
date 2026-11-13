@@ -41,9 +41,9 @@ Alternative terminal states: `rejected`, `expired`. A request expires after 90 s
 
 1. Owner registers a Helper: `POST /v1/devices/register`.
 2. Helper heartbeats: `POST /v1/devices/heartbeat`.
-3. Owner creates a share token: `POST /v1/devices/:deviceId/invites` (1–30 day expiry). The raw token is returned once; only its hash is stored.
+3. Owner creates a share token: `POST /v1/devices/:deviceId/invites` (1–30 day expiry). The raw token is returned once; only its hash is stored. Revoke it with `POST /v1/devices/:deviceId/invites/:inviteId/revoke`.
 4. Remote user receives the token out-of-band and asks for a session: `POST /v1/sessions` with `{ inviteToken, reason }`. The device must also have a live signaling connection.
-5. Device receives `session.requested` over `/v1/realtime` and the owner explicitly approves or rejects via `POST /v1/sessions/:id/decision`.
+5. Each participant obtains a one-time 30-second WebSocket ticket from `POST /v1/realtime/ticket`, then connects to `/v1/realtime?ticket=...`. Device receives `session.requested` and the owner explicitly approves or rejects via `POST /v1/sessions/:id/decision`.
 6. Once approved, participants exchange WebRTC signaling messages over the authenticated WebSocket.
 7. Either participant can end the session.
 
@@ -52,7 +52,7 @@ WebSocket messages use JSON envelopes:
 - `{ type: "session.started", sessionId }`
 - `{ type: "session.ended", sessionId }`
 
-The signaling relay forwards opaque SDP/ICE payloads only between the two session participants and only after approval. It does not inspect or store media. WebRTC media encryption is provided by DTLS-SRTP; deploy TURN with authenticated, short-lived credentials before production.
+The signaling relay forwards opaque SDP/ICE payloads only between the two session participants and only after approval. WebSocket tickets are single-use and expire after 30 seconds, so browser clients do not need to set a non-standard Authorization header. It does not inspect or store media. WebRTC media encryption is provided by DTLS-SRTP; deploy TURN with authenticated, short-lived credentials before production.
 
 ## Important MVP boundaries
 
