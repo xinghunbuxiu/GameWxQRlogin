@@ -20,6 +20,12 @@ const db = new Pool({ connectionString: env.DATABASE_URL, max: 10, ssl: process.
 const jwks = createRemoteJWKSet(new URL(env.AUTH_JWKS_URL));
 const app = Fastify({ logger: true, bodyLimit: 64 * 1024 });
 await app.register(websocket);
+app.setErrorHandler((error, request, reply) => {
+  if (error instanceof z.ZodError) return reply.code(400).send({ error: "INVALID_REQUEST", issues: error.issues });
+  const status = typeof (error as { statusCode?: unknown }).statusCode === "number" ? (error as { statusCode: number }).statusCode : 500;
+  if (status >= 500) request.log.error(error);
+  return reply.code(status).send({ error: status >= 500 ? "INTERNAL_ERROR" : error.message });
+});
 
 type Principal = { kind: "user" | "device"; id: string; ownerId?: string };
 type Socket = { principal: Principal; send: (value: unknown) => void; close: () => void };
@@ -229,5 +235,5 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
 
 const schema = await readFile(new URL("../schema.sql", import.meta.url), "utf8");
 await db.query(schema);
-await app.listen({ port: env.PORT, host: "0.0.0.0" });
 app.addHook("onClose", async () => { await db.end(); });
+await app.listen({ port: env.PORT, host: "0.0.0.0" });
