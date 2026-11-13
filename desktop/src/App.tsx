@@ -24,7 +24,7 @@ function App() {
   const [pairAddress, setPairAddress] = useState("");
   const [pairingCode, setPairingCode] = useState("");
   const [connectAddress, setConnectAddress] = useState("");
-  const [actionBusy, setActionBusy] = useState<"pair" | "connect" | "disconnect" | null>(null);
+  const [actionBusy, setActionBusy] = useState<"pair" | "connect" | "disconnect" | "launch" | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [deviceDetails, setDeviceDetails] = useState<DeviceDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -92,6 +92,19 @@ function App() {
     }
   };
 
+  const launchTargetGame = async (serial: string) => {
+    setActionBusy("launch");
+    setActionMessage(null);
+    try {
+      const result = await invoke<string>("launch_target_game", { serial });
+      setActionMessage(result);
+    } catch (error) {
+      setActionMessage("启动游戏失败：" + String(error));
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
   const inspectDevice = async (serial: string) => {
     setDetailsLoading(true);
     setDeviceDetails(null);
@@ -135,7 +148,7 @@ function App() {
           </div>
           <div className="section-grid">
             <div className="panel"><div className="panel-title"><div><h2>设备列表</h2><p>ADB 实时发现结果</p></div><button className="text-button" onClick={() => setSection("devices")}>查看全部 →</button></div>
-              {snapshot?.devices.length ? <DeviceList devices={snapshot.devices.slice(0, 4)} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} busy={actionBusy === "disconnect"}/> : <div className="empty-state"><div className="empty-icon"><Cable size={24}/></div><b>{snapshot?.available ? "还没有连接设备" : "尚未找到 ADB"}</b><span>{snapshot?.available ? "通过 USB 调试或无线调试连接手机，也可以接入 Android 模拟器。" : "安装 Android SDK Platform-Tools，并将 adb 加入 PATH 后刷新。"}</span><button className="secondary" onClick={() => setSection("devices")}>设备连接说明</button></div>}
+              {snapshot?.devices.length ? <DeviceList devices={snapshot.devices.slice(0, 4)} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} onLaunch={launchTargetGame} busy={actionBusy === "disconnect" || actionBusy === "launch"}/> : <div className="empty-state"><div className="empty-icon"><Cable size={24}/></div><b>{snapshot?.available ? "还没有连接设备" : "尚未找到 ADB"}</b><span>{snapshot?.available ? "通过 USB 调试或无线调试连接手机，也可以接入 Android 模拟器。" : "安装 Android SDK Platform-Tools，并将 adb 加入 PATH 后刷新。"}</span><button className="secondary" onClick={() => setSection("devices")}>设备连接说明</button></div>}
             </div>
             <div className="panel"><div className="panel-title"><div><h2>快速开始</h2><p>完成自动化运行前的准备</p></div></div><div className="steps"><Step n="01" title="连接 Android 设备" desc="ADB / 无线调试" done={onlineCount > 0}/><Step n="02" title="授权自动化能力" desc="无障碍服务 / 可选 Shizuku" done={false}/><Step n="03" title="配置游戏适配器" desc="我的养老时光" done={false}/><Step n="04" title="创建并运行任务" desc="识别、操作、验证、记录" done={false}/></div></div>
           </div>
@@ -173,10 +186,10 @@ function App() {
   </div>;
 }
 
-function DeviceList({ devices, onDisconnect, onDetails, busy = false }: { devices: AdbDevice[]; onDisconnect?: (serial: string) => void; onDetails?: (serial: string) => void; busy?: boolean }) {
+function DeviceList({ devices, onDisconnect, onDetails, onLaunch, busy = false }: { devices: AdbDevice[]; onDisconnect?: (serial: string) => void; onDetails?: (serial: string) => void; onLaunch?: (serial: string) => void; busy?: boolean }) {
   return <div className="device-list">{devices.map(device => {
     const wireless = device.serial.includes(":");
-    return <div className="device-row" key={device.serial}><div className="device-icon"><Smartphone size={18}/></div><div className="device-main"><b>{device.model ?? device.device ?? device.serial}</b><small>{device.serial}{device.product ? " · " + device.product : ""}</small></div><span className={device.state === "device" ? "device-state connected" : "device-state"}>{device.state === "device" ? <><CheckCircle2 size={13}/> 已授权</> : device.state === "unauthorized" ? "待授权" : device.state === "offline" ? "离线" : device.state}</span>{onDetails && device.state === "device" && <button className="details-button" type="button" onClick={() => onDetails(device.serial)}>详情</button>}{wireless && onDisconnect && <button className="disconnect-button" type="button" disabled={busy} onClick={() => onDisconnect(device.serial)}>断开</button>}</div>;
+    return <div className="device-row" key={device.serial}><div className="device-icon"><Smartphone size={18}/></div><div className="device-main"><b>{device.model ?? device.device ?? device.serial}</b><small>{device.serial}{device.product ? " · " + device.product : ""}</small></div><span className={device.state === "device" ? "device-state connected" : "device-state"}>{device.state === "device" ? <><CheckCircle2 size={13}/> 已授权</> : device.state === "unauthorized" ? "待授权" : device.state === "offline" ? "离线" : device.state}</span>{onDetails && device.state === "device" && <button className="details-button" type="button" onClick={() => onDetails(device.serial)}>详情</button>}{onLaunch && device.state === "device" && <button className="launch-button" type="button" disabled={busy} onClick={() => onLaunch(device.serial)}>启动游戏</button>}{wireless && onDisconnect && <button className="disconnect-button" type="button" disabled={busy} onClick={() => onDisconnect(device.serial)}>断开</button>}</div>;
   })}</div>;
 }
 function Detail({ label, value }: { label: string; value: string | null }) {
