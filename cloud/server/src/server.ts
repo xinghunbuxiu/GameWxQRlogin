@@ -137,7 +137,7 @@ app.post("/v1/devices/:deviceId/invites", async (request, reply) => {
     "INSERT INTO device_invites(id,device_id,created_by,token_hash,expires_at) VALUES($1,$2,$3,$4,now()+($5 * interval '1 day'))",
     [id, params.deviceId, user.id, hashSecret(token), body.expiresInDays]
   );
-  return reply.code(201).send({ inviteToken: token, expiresInDays: body.expiresInDays });
+  return reply.code(201).send({ inviteId: id, inviteToken: token, expiresInDays: body.expiresInDays });
 });
 
 app.post("/v1/sessions", async (request, reply) => {
@@ -176,7 +176,7 @@ app.post("/v1/sessions/:sessionId/decision", async (request) => {
     return { status: "expired" };
   }
   const approved = body.decision === "approve";
-  await db.query("UPDATE remote_sessions SET status=$1,approved_at=CASE WHEN $2 THEN now() ELSE NULL END WHERE id=$3", [approved ? "approved" : "rejected", approved, params.sessionId]);
+  await db.query("UPDATE remote_sessions SET status=$1,approved_at=CASE WHEN $2 THEN now() ELSE NULL END,expires_at=CASE WHEN $2 THEN now()+interval '5 minutes' ELSE expires_at END WHERE id=$3", [approved ? "approved" : "rejected", approved, params.sessionId]);
   await record(params.sessionId, device.id, approved ? "session.approved" : "session.rejected");
   emit(p => p.kind === "user" && p.id === session.requester_id, { type: approved ? "session.approved" : "session.rejected", sessionId: params.sessionId });
   return { status: approved ? "approved" : "rejected" };
@@ -229,13 +229,24 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
     try {
       const data = Buffer.isBuffer(raw) ? raw : Array.isArray(raw) ? Buffer.concat(raw) : Buffer.from(raw);
       if (data.length > 48 * 1024) { socket.close(1009, "message too large"); return; }
-      const message = z.object({
-        type: z.enum(["signal", "session.started", "session.ended"]),
-        sessionId: z.string().uuid(),
-        payload: z.unknown().optional()
-      }).parse(JSON.parse(data.toString("utf8")));
+      const signalPayload = z.discriminatedUnion("kind", [
+        z.object({ kind: z.enum(["offer", "answer"]), data: z.string().min(1).max(32768) }).strict(),
+        z.object({
+          kind: z.literal("ice"),
+          data: z.object({
+            candidate: z.string().min(1).max(4096),
+            sdpMid: z.string().max(128).nullable().optional(),
+            sdpMLineIndex: z.number().int().min(0).max(65535).nullable().optional()
+          }).strict()
+        }).strict()
+      ]);
+      const message = z.discriminatedUnion("type", [
+        z.object({ type: z.literal("signal"), sessionId: z.string().uuid(), payload: signalPayload }).strict(),
+        z.object({ type: z.literal("session.started"), sessionId: z.string().uuid() }).strict(),
+        z.object({ type: z.literal("session.ended"), sessionId: z.string().uuid() }).strict()
+      ]).parse(JSON.parse(data.toString("utf8")));
       const result = await db.query(
-        "SELECT s.id,s.device_id,s.requester_id,s.status,d.owner_id FROM remote_sessions s JOIN devices d ON d.id=s.device_id WHERE s.id=$1",
+        "SELECT s.id,s.device_id,s.requester_id,s.status,s.expires_at,d.owner_id FROM remote_sessions s JOIN devices d ON d.id=s.device_id WHERE s.id=$1",
         [message.sessionId]
       );
       const session = result.rows[0];
@@ -245,11 +256,15 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
       if (!isDevice && !isRequester) throw new Error("Not a participant");
       if (message.type === "signal") {
         if (!["approved", "active"].includes(session.status)) throw new Error("Session not approved");
+        if (new Date(session.expires_at).getTime() <= Date.now()) {
+          await db.query("UPDATE remote_sessions SET status='expired' WHERE id=$1 AND status IN ('approved','active')", [message.sessionId]);
+          throw new Error("Session expired");
+        }
         const target = (p: Principal) => isDevice ? p.kind === "user" && p.id === session.requester_id : p.kind === "device" && p.id === session.device_id;
         emit(target, { type: "signal", sessionId: message.sessionId, payload: message.payload });
       } else if (message.type === "session.started") {
         if (!isDevice || session.status !== "approved") throw new Error("Only the approved device can start");
-        await db.query("UPDATE remote_sessions SET status='active',started_at=now() WHERE id=$1", [message.sessionId]);
+        await db.query("UPDATE remote_sessions SET status='active',started_at=now(),expires_at=now()+interval '4 hours' WHERE id=$1", [message.sessionId]);
         await record(message.sessionId, principal.id, "session.started");
         emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.started", sessionId: message.sessionId });
       } else {
