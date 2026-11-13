@@ -26,6 +26,7 @@ import java.util.List;
 /** Android screen sender. The browser/requester is the offerer; this device answers. */
 public final class RemoteWebRtcSession {
     public interface Listener {
+        void onReady();
         void onConnected();
         void onFailure(String message);
     }
@@ -129,6 +130,7 @@ public final class RemoteWebRtcSession {
             videoTrack = factory.createVideoTrack("gamepilot-screen-track", videoSource);
             peerConnection.addTrack(videoTrack, Collections.singletonList("gamepilot-screen"));
             screenCapturer.startCapture(width, height, fps);
+            listener.onReady();
         } catch (Exception error) {
             listener.onFailure(error.getMessage() == null ? "WebRTC 初始化失败" : error.getMessage());
             release();
