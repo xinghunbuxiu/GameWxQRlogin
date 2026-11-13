@@ -7,7 +7,7 @@ This directory contains the first native iOS Helper source: Keychain credential 
 1. Create an iOS app target named GamePilotHelper (deployment target iOS 15 or later).
 2. Add a Broadcast Upload Extension target named GamePilotBroadcast.
 3. Replace the generated extension SampleHandler.swift and Info.plist with the files in ReplayKitBroadcast/.
-4. Add the same App Group capability to both targets and replace the placeholder App Group identifier in SampleHandler.swift.
+4. Add the same App Group capability to both targets and replace the placeholder App Group identifier in SampleHandler.swift and the extension bundle identifier in RemoteHelperView.swift.
 5. Sign both targets with the same team. Do not embed signing credentials in the repository.
 
 ## Current behavior
