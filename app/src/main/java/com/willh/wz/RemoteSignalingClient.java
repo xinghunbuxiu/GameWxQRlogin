@@ -16,7 +16,7 @@ import okhttp3.WebSocketListener;
 public final class RemoteSignalingClient {
     public interface Listener {
         void onConnected();
-        void onSessionRequested(String sessionId, String reason);
+        void onSessionRequested(String sessionId, String requesterId, String reason);
         void onDisconnected(String message);
     }
 
@@ -53,6 +53,7 @@ public final class RemoteSignalingClient {
                     if ("session.requested".equals(message.optString("type"))) {
                         listener.onSessionRequested(
                                 message.getString("sessionId"),
+                                message.optString("requesterId", "未知申请账号"),
                                 message.optString("reason", "远程用户请求连接")
                         );
                     } else if ("session.ended".equals(message.optString("type"))) {
