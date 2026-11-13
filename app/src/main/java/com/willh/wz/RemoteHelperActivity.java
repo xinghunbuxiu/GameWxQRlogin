@@ -26,6 +26,8 @@ public class RemoteHelperActivity extends Activity {
     private TextView statusView;
     private Button registerButton;
     private Button heartbeatButton;
+    private Button clearButton;
+    private boolean deviceRegistered;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -69,7 +71,7 @@ public class RemoteHelperActivity extends Activity {
         root.addView(heartbeatButton);
         heartbeatButton.setOnClickListener(v -> sendHeartbeat());
 
-        Button clearButton = new Button(this);
+        clearButton = new Button(this);
         clearButton.setText("解除本机云端绑定");
         root.addView(clearButton);
         clearButton.setOnClickListener(v -> clearDevice());
@@ -123,7 +125,7 @@ public class RemoteHelperActivity extends Activity {
                 RemoteDeviceStore.save(this, server, registration.deviceId, registration.deviceToken);
                 runOnUiThread(() -> {
                     ownerTokenInput.setText("");
-                    heartbeatButton.setEnabled(true);
+                    deviceRegistered = true;
                     setBusy(false);
                     setStatus("设备注册成功\n设备 ID：" + registration.deviceId
                             + "\n凭证已加密保存。当前仅完成设备接入，尚未建立远程会话。");
@@ -146,7 +148,7 @@ public class RemoteHelperActivity extends Activity {
                 RemoteApiClient.heartbeat(record.serverUrl, record.deviceToken);
                 runOnUiThread(() -> {
                     setBusy(false);
-                    heartbeatButton.setEnabled(true);
+                    setBusy(false);
                     setStatus("心跳成功：云端已确认设备在线。\n设备 ID：" + safeId());
                 });
             } catch (Exception error) {
@@ -168,6 +170,7 @@ public class RemoteHelperActivity extends Activity {
                         return;
                     }
                     serverInput.setText(record.serverUrl);
+                    deviceRegistered = true;
                     heartbeatButton.setEnabled(true);
                     setStatus("已保存设备绑定\n设备 ID：" + record.deviceId
                             + "\n点击“发送在线心跳”验证服务器连接。");
@@ -180,6 +183,7 @@ public class RemoteHelperActivity extends Activity {
 
     private void clearDevice() {
         RemoteDeviceStore.clear(this);
+        deviceRegistered = false;
         heartbeatButton.setEnabled(false);
         setStatus("已清除本机保存的云端凭证。服务器端设备记录仍保留，需要由云端管理端另行撤销。");
     }
@@ -200,7 +204,8 @@ public class RemoteHelperActivity extends Activity {
 
     private void setBusy(boolean busy) {
         registerButton.setEnabled(!busy);
-        heartbeatButton.setEnabled(!busy && heartbeatButton.isEnabled());
+        heartbeatButton.setEnabled(!busy && deviceRegistered);
+        clearButton.setEnabled(!busy && deviceRegistered);
     }
 
     private void setStatus(String text) {
