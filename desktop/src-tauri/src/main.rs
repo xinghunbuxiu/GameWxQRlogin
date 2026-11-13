@@ -326,6 +326,7 @@ mod tests {
         assert!(super::validate_apk_extension(std::path::Path::new("/tmp/game")).is_err());
     }
 
+    #[test]
     fn accepts_ipv4_and_hostname_endpoints() {
         assert!(validate_adb_endpoint("192.168.1.20:37123").is_ok());
         assert!(validate_adb_endpoint("android-device.local:5555").is_ok());
