@@ -232,7 +232,10 @@ fn install_target_game(serial: String, apk_path: String) -> Result<String, Strin
     let path_arg = path.to_str().ok_or("APK 路径不是有效的 UTF-8 路径。")?;
     let output = run_adb_with_timeout(&adb, &["-s", &serial, "install", "-r", path_arg], Duration::from_secs(180))?;
     let message = output.trim();
-    if message.contains("Success") || message.contains("success") {
+    if let Some(failure) = message.lines().find(|line| line.trim_start().starts_with("Failure")) {
+        return Err(failure.trim().to_string());
+    }
+    if message.lines().any(|line| line.trim() == "Success") {
         Ok("APK 安装成功。".to_string())
     } else {
         Ok(if message.is_empty() { "ADB 安装命令已完成，请检查设备应用列表。".to_string() } else { message.to_string() })
