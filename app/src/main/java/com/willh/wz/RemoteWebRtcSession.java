@@ -64,7 +64,8 @@ public final class RemoteWebRtcSession {
         this.fps = fps;
     }
 
-    public void start() {
+    public synchronized void start() {
+        if (released) return;
         try {
             initializeFactory(context);
             eglBase = EglBase.create();
@@ -206,7 +207,7 @@ public final class RemoteWebRtcSession {
         factoryInitialized = true;
     }
 
-    public void release() {
+    public synchronized void release() {
         if (released) return;
         released = true;
         if (screenCapturer != null) {
