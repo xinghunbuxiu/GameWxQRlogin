@@ -24,7 +24,7 @@ app.setErrorHandler((error, request, reply) => {
   if (error instanceof z.ZodError) return reply.code(400).send({ error: "INVALID_REQUEST", issues: error.issues });
   const status = typeof (error as { statusCode?: unknown }).statusCode === "number" ? (error as { statusCode: number }).statusCode : 500;
   if (status >= 500) request.log.error(error);
-  return reply.code(status).send({ error: status >= 500 ? "INTERNAL_ERROR" : error.message });
+  return reply.code(status).send({ error: status >= 500 ? "INTERNAL_ERROR" : error instanceof Error ? error.message : "Request failed" });
 });
 
 type Principal = { kind: "user" | "device"; id: string; ownerId?: string };
