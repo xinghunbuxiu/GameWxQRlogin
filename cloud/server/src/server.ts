@@ -18,7 +18,7 @@ const env = z.object({
 
 const db = new Pool({ connectionString: env.DATABASE_URL, max: 10, ssl: process.env.PGSSLMODE === "require" ? { rejectUnauthorized: true } : undefined });
 const jwks = createRemoteJWKSet(new URL(env.AUTH_JWKS_URL));
-const app = Fastify({ logger: true, bodyLimit: 64 * 1024 });
+const app = Fastify({ logger: { redact: { paths: ["req.url", "req.headers.authorization"], censor: "[REDACTED]" } }, bodyLimit: 64 * 1024 });
 await app.register(websocket);
 app.setErrorHandler((error, request, reply) => {
   if (error instanceof z.ZodError) return reply.code(400).send({ error: "INVALID_REQUEST", issues: error.issues });
