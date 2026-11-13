@@ -10,7 +10,7 @@
 
 ## Identity and device registration
 
-A signed-in owner registers a Helper with platform, display name, app version, and a capability list. The server returns a random device credential exactly once. The Helper stores it in Android Keystore or iOS Keychain. Only a peppered hash is persisted by the server.
+A signed-in owner registers a Helper with platform, display name, app version, and a capability list. The server returns a random device credential exactly once. The Helper stores it in Android Keystore or iOS Keychain. Only a peppered hash is persisted by the server. To let another user request access, the owner creates a time-limited invite token; only its hash is stored. Possession of the invite permits a request, never automatic access. The owner still approves each individual session.
 
 Capabilities are descriptive and platform-specific, for example:
 - Android: `screen.capture`, `accessibility.observe`, `accessibility.actions.basic`
