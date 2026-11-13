@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: gamepilot
+      POSTGRES_USER: gamepilot
+      POSTGRES_PASSWORD: change-me-local-only
+    ports:
+      - "5432:5432"
+    volumes:
+      - gamepilot_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gamepilot -d gamepilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  gamepilot_pg:
