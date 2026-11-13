@@ -7,26 +7,21 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Handler;
-import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.util.Log;
-import android.view.WindowManager;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import org.json.JSONObject;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Owner-approved MediaProjection lifecycle. Frames are currently discarded after capture;
- * this service does not transmit screen contents until the WebRTC video track is integrated.
+ * Owner-approved screen-sharing foreground service.
+ * MediaProjection is handed to WebRTC's ScreenCapturerAndroid; screen frames are sent
+ * only over an approved WebRTC PeerConnection.
  */
 public class RemoteCaptureService extends Service {
     public static final String ACTION_START = "com.willh.wz.action.START_REMOTE_CAPTURE";
@@ -39,11 +34,13 @@ public class RemoteCaptureService extends Service {
     private static final String CHANNEL_ID = "gamepilot_screen_share";
     private static final int NOTIFICATION_ID = 7310;
 
-    private MediaProjection projection;
-    private VirtualDisplay virtualDisplay;
-    private ImageReader imageReader;
-    private HandlerThread frameThread;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
     private String sessionId;
+    private Intent projectionPermissionData;
+    private RemoteSignalingClient signalingClient;
+    private RemoteWebRtcSession webRtcSession;
+    private boolean sessionStarted;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -51,33 +48,18 @@ public class RemoteCaptureService extends Service {
             stopCapture(true);
             return START_NOT_STICKY;
         }
-        if (!ACTION_START.equals(intent.getAction())) return START_NOT_STICKY;
-        if (projection != null) return START_NOT_STICKY;
+        if (!ACTION_START.equals(intent.getAction()) || sessionId != null) return START_NOT_STICKY;
 
         sessionId = intent.getStringExtra(EXTRA_SESSION_ID);
-        startCaptureForeground();
-        try {
-            int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
-            Intent resultData = intent.getParcelableExtra(EXTRA_RESULT_DATA);
-            if (resultData == null || sessionId == null || sessionId.isEmpty()) {
-                throw new IllegalArgumentException("缺少屏幕采集授权数据");
-            }
-            MediaProjectionManager manager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-            projection = manager.getMediaProjection(resultCode, resultData);
-            if (projection == null) throw new IllegalStateException("系统未授予屏幕采集权限");
-
-            projection.registerCallback(new MediaProjection.Callback() {
-                @Override public void onStop() {
-                    projection = null;
-                    stopCapture(true);
-                }
-            }, new Handler(getMainLooper()));
-            startVirtualDisplay();
-            Log.i(TAG, "Owner-approved screen capture started for session " + sessionId);
-        } catch (Exception error) {
-            Log.e(TAG, "Unable to start MediaProjection", error);
+        projectionPermissionData = intent.getParcelableExtra(EXTRA_RESULT_DATA);
+        int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
+        if (sessionId == null || sessionId.isEmpty() || projectionPermissionData == null || resultCode != RESULT_OK) {
             stopCapture(true);
+            return START_NOT_STICKY;
         }
+
+        startCaptureForeground();
+        connectSignalingAndStartWebRtc();
         return START_NOT_STICKY;
     }
 
@@ -86,7 +68,7 @@ public class RemoteCaptureService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID, "GamePilot 屏幕共享", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("设备正在进行用户主动授权的屏幕采集");
+            channel.setDescription("设备正在进行用户主动授权的屏幕共享");
             manager.createNotificationChannel(channel);
         }
 
@@ -99,8 +81,8 @@ public class RemoteCaptureService extends Service {
                 ? new Notification.Builder(this, CHANNEL_ID)
                 : new Notification.Builder(this);
         builder.setSmallIcon(android.R.drawable.ic_menu_view)
-                .setContentTitle("GamePilot 屏幕采集已开启")
-                .setContentText("仅在本机主人批准的会话期间运行")
+                .setContentTitle("GamePilot 屏幕共享已开启")
+                .setContentText("画面仅发送给本次已批准的远程会话")
                 .setOngoing(true)
                 .addAction(new Notification.Action.Builder(
                         android.R.drawable.ic_media_pause, "停止共享", stopPending).build());
@@ -112,61 +94,89 @@ public class RemoteCaptureService extends Service {
         }
     }
 
-    private void startVirtualDisplay() {
-        DisplayMetrics metrics = new DisplayMetrics();
-        WindowManager windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        windowManager.getDefaultDisplay().getRealMetrics(metrics);
-        int width = Math.max(metrics.widthPixels, 1);
-        int height = Math.max(metrics.heightPixels, 1);
-        int density = metrics.densityDpi;
-
-        frameThread = new HandlerThread("GamePilotScreenFrames");
-        frameThread.start();
-        imageReader = ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 2);
-        imageReader.setOnImageAvailableListener(reader -> {
-            Image image = null;
+    private void connectSignalingAndStartWebRtc() {
+        new Thread(() -> {
             try {
-                image = reader.acquireLatestImage();
-                // Placeholder sink: close frames immediately until WebRTC is connected.
-            } catch (IllegalStateException ignored) {
-            } finally {
-                if (image != null) image.close();
-            }
-        }, new Handler(frameThread.getLooper()));
+                RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
+                if (record == null) throw new IllegalStateException("设备凭证不存在");
 
-        virtualDisplay = projection.createVirtualDisplay(
-                "GamePilotOwnerApprovedCapture",
-                width,
-                height,
-                density,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader.getSurface(),
-                null,
-                null
-        );
-        if (virtualDisplay == null) throw new IllegalStateException("系统无法创建屏幕采集显示器");
+                RemoteSignalingClient client = new RemoteSignalingClient();
+                signalingClient = client;
+                client.connect(record.serverUrl, record.deviceToken, new RemoteSignalingClient.Listener() {
+                    @Override public void onConnected() {
+                        mainHandler.post(() -> {
+                            if (stopping.get()) return;
+                            DisplayMetrics metrics = getResources().getDisplayMetrics();
+                            int width = Math.max(metrics.widthPixels, 1);
+                            int height = Math.max(metrics.heightPixels, 1);
+                            webRtcSession = new RemoteWebRtcSession(
+                                    RemoteCaptureService.this,
+                                    sessionId,
+                                    projectionPermissionData,
+                                    client,
+                                    new RemoteWebRtcSession.Listener() {
+                                        @Override public void onConnected() {
+                                            if (!sessionStarted) {
+                                                sessionStarted = true;
+                                                client.sendSessionStarted(sessionId);
+                                                Log.i(TAG, "WebRTC screen session connected");
+                                            }
+                                        }
+                                        @Override public void onFailure(String message) {
+                                            Log.w(TAG, message);
+                                            stopCapture(true);
+                                        }
+                                    },
+                                    width,
+                                    height,
+                                    15
+                            );
+                            webRtcSession.start();
+                        });
+                    }
+
+                    @Override public void onSessionRequested(String requestedSessionId, String requesterId, String reason) {
+                        // A second request is not accepted while this foreground session is active.
+                    }
+
+                    @Override public void onSignal(String incomingSessionId, JSONObject payload) {
+                        if (!incomingSessionId.equals(sessionId)) return;
+                        RemoteWebRtcSession current = webRtcSession;
+                        if (current != null) current.handleSignal(payload);
+                    }
+
+                    @Override public void onDisconnected(String message) {
+                        Log.w(TAG, message);
+                        stopCapture(true);
+                    }
+                });
+            } catch (Exception error) {
+                Log.e(TAG, "Unable to connect signaling for approved session", error);
+                stopCapture(true);
+            }
+        }, "GamePilotWebRtcBootstrap").start();
     }
 
     private void stopCapture(boolean endRemoteSession) {
+        mainHandler.post(() -> stopCaptureOnMain(endRemoteSession));
+    }
+
+    private void stopCaptureOnMain(boolean endRemoteSession) {
+        if (!stopping.compareAndSet(false, true)) return;
         final String endedSession = sessionId;
         sessionId = null;
-        if (virtualDisplay != null) {
-            virtualDisplay.release();
-            virtualDisplay = null;
+
+        RemoteWebRtcSession oldSession = webRtcSession;
+        webRtcSession = null;
+        RemoteSignalingClient oldSignaling = signalingClient;
+        signalingClient = null;
+        projectionPermissionData = null;
+
+        if (oldSession != null) {
+            new Thread(oldSession::release, "GamePilotWebRtcRelease").start();
         }
-        if (imageReader != null) {
-            imageReader.close();
-            imageReader = null;
-        }
-        if (frameThread != null) {
-            frameThread.quitSafely();
-            frameThread = null;
-        }
-        if (projection != null) {
-            MediaProjection old = projection;
-            projection = null;
-            old.stop();
-        }
+        if (oldSignaling != null) oldSignaling.close();
+
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(NOTIFICATION_ID);
         stopForeground(true);
 
@@ -185,7 +195,7 @@ public class RemoteCaptureService extends Service {
 
     @Override
     public void onDestroy() {
-        if (projection != null || virtualDisplay != null || imageReader != null) stopCapture(true);
+        stopCapture(true);
         super.onDestroy();
     }
 
