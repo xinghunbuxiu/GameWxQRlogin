@@ -1,5 +1,6 @@
 package com.willh.wz;
 
+import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -53,7 +54,7 @@ public class RemoteCaptureService extends Service {
         sessionId = intent.getStringExtra(EXTRA_SESSION_ID);
         projectionPermissionData = intent.getParcelableExtra(EXTRA_RESULT_DATA);
         int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
-        if (sessionId == null || sessionId.isEmpty() || projectionPermissionData == null || resultCode != RESULT_OK) {
+        if (sessionId == null || sessionId.isEmpty() || projectionPermissionData == null || resultCode != Activity.RESULT_OK) {
             stopCapture(true);
             return START_NOT_STICKY;
         }
