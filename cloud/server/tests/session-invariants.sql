@@ -65,6 +65,22 @@ BEGIN
     RAISE EXCEPTION 'live-session unique index did not reject a competing request';
   END IF;
 
+  -- Exercise the exact partial-index inference clause used by the API route.
+  INSERT INTO remote_sessions (
+    id, device_id, requester_id, status, reason, expires_at
+  ) VALUES (
+    '00000000-0000-4000-8000-000000000204',
+    '00000000-0000-4000-8000-000000000101',
+    'third-requester',
+    'pending',
+    'ON CONFLICT regression',
+    now() + interval '90 seconds'
+  ) ON CONFLICT (device_id) WHERE status IN ('pending','approved','active') DO NOTHING;
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  IF affected <> 0 THEN
+    RAISE EXCEPTION 'ON CONFLICT did not suppress a competing live session';
+  END IF;
+
   UPDATE remote_sessions
   SET status = 'approved', approved_at = now(), expires_at = now() + interval '5 minutes'
   WHERE id = '00000000-0000-4000-8000-000000000202'
