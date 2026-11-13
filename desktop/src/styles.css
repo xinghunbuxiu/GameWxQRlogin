@@ -22,3 +22,21 @@
 .device-state{margin-left:auto;display:flex;align-items:center;gap:5px;color:#d9ad6d;font-size:10px;white-space:nowrap}
 .device-state.connected{color:#6bd3a4}
 .device-empty{min-height:190px}
+
+
+/* Wireless ADB pairing */
+.wireless-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0 12px}
+.wireless-form{display:flex;flex-direction:column;gap:9px;padding:15px;background:#151f2e;border:1px solid #29384d;border-radius:9px}
+.wireless-heading{display:flex;align-items:center;gap:8px;color:#9fc1f3}
+.wireless-heading b{font-size:11px;color:#dce6f5}
+.wireless-form p{font-size:9px;line-height:1.6;color:#8190a7;margin:0 0 3px;min-height:30px}
+.wireless-form label{font-size:9px;color:#9aa8bc}
+.wireless-form input{height:35px;border:1px solid #34445b;border-radius:6px;background:#0e1724;color:#e5edf8;padding:0 10px;font:inherit;font-size:10px;outline:none}
+.wireless-form input:focus{border-color:#5288db;box-shadow:0 0 0 2px #5288db22}
+.wireless-form input::placeholder{color:#596a82}
+.wireless-form .secondary{align-self:flex-start;margin-top:4px}
+.wireless-form .secondary:disabled{opacity:.45;cursor:not-allowed}
+.wireless-spacer{flex:1;min-height:35px}
+.action-message{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;margin:10px 0;border:1px solid #344762;background:#17263a;border-radius:7px;color:#a9bdd9;font-size:10px;line-height:1.6;overflow-wrap:anywhere}
+.action-message svg{flex-shrink:0;margin-top:1px;color:#83adf0}
+@media(max-width:1150px){.wireless-grid{grid-template-columns:1fr}}
