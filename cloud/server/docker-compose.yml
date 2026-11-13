@@ -14,8 +14,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-volumes:
-  gamepilot_pg:
   server:
     build: .
     env_file:
@@ -28,3 +26,5 @@ volumes:
     depends_on:
       postgres:
         condition: service_healthy
+volumes:
+  gamepilot_pg:
