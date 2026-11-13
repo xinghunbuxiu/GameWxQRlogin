@@ -1,8 +1,12 @@
 package com.willh.wz;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
+import org.webrtc.PeerConnection;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
@@ -47,6 +51,40 @@ public final class RemoteApiClient {
 
         JSONObject result = post(serverUrl, "/v1/devices/register", ownerJwt, body);
         return new Registration(result.getString("deviceId"), result.getString("deviceToken"));
+    }
+
+    public static List<PeerConnection.IceServer> getIceServers(String serverUrl, String deviceToken) throws Exception {
+        JSONObject result = get(serverUrl, "/v1/turn/credentials", deviceToken);
+        JSONArray servers = result.getJSONArray("iceServers");
+        List<PeerConnection.IceServer> iceServers = new ArrayList<>();
+        for (int i = 0; i < servers.length(); i++) {
+            JSONObject server = servers.getJSONObject(i);
+            JSONArray urls = server.getJSONArray("urls");
+            String username = server.optString("username", "");
+            String credential = server.optString("credential", "");
+            for (int j = 0; j < urls.length(); j++) {
+                PeerConnection.IceServer.Builder builder = PeerConnection.IceServer.builder(urls.getString(j));
+                if (!username.isEmpty()) builder.setUsername(username);
+                if (!credential.isEmpty()) builder.setPassword(credential);
+                iceServers.add(builder.createIceServer());
+            }
+        }
+        if (iceServers.isEmpty()) throw new IllegalStateException("服务器没有返回 ICE 服务配置");
+        return iceServers;
+    }
+
+    private static JSONObject get(String serverUrl, String path, String bearer) throws Exception {
+        String base = normalizeServerUrl(serverUrl);
+        Request request = new Request.Builder()
+                .url(base + path)
+                .header("Authorization", "Bearer " + bearer)
+                .get()
+                .build();
+        try (Response response = HTTP.newCall(request).execute()) {
+            String payload = response.body() == null ? "" : response.body().string();
+            if (!response.isSuccessful()) throw new IllegalStateException("服务器请求失败：HTTP_" + response.code());
+            return new JSONObject(payload);
+        }
     }
 
     public static String createRealtimeTicket(String serverUrl, String deviceToken) throws Exception {
