@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS remote_sessions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS sessions_device_idx ON remote_sessions(device_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_one_live_per_device_idx ON remote_sessions(device_id) WHERE status IN ('pending', 'approved', 'active');
 CREATE INDEX IF NOT EXISTS sessions_requester_idx ON remote_sessions(requester_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON remote_sessions(status, expires_at);
 
