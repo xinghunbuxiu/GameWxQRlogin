@@ -39,3 +39,14 @@ CREATE TABLE IF NOT EXISTS session_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS session_events_session_idx ON session_events(session_id, created_at);
+
+CREATE TABLE IF NOT EXISTS device_invites (
+  id UUID PRIMARY KEY,
+  device_id UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  created_by TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS device_invites_device_idx ON device_invites(device_id, expires_at);
