@@ -39,7 +39,17 @@ const secureEqual = (a: string, b: string) => {
 
 async function authenticate(request: FastifyRequest): Promise<Principal> {
   const header = request.headers.authorization;
-  if (!header?.startsWith("Bearer ")) throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+  if (!header?.startsWith("Bearer ")) {
+    const query = z.object({ ticket: z.string().min(20).max(160) }).safeParse(request.query);
+    if (!query.success) throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+    const consumed = await db.query(
+      "UPDATE realtime_tickets SET consumed_at=now() WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>now() RETURNING principal_kind,principal_id,owner_id",
+      [hashSecret(query.data.ticket)]
+    );
+    const ticket = consumed.rows[0];
+    if (!ticket) throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+    return { kind: ticket.principal_kind, id: ticket.principal_id, ownerId: ticket.owner_id ?? undefined };
+  }
   const token = header.slice(7);
   if (token.startsWith("gp_dev_")) {
     const result = await db.query("SELECT id, owner_id, device_secret_hash FROM devices WHERE device_secret_hash = $1", [hashSecret(token)]);
@@ -94,6 +104,17 @@ app.get("/v1/devices", async (request) => {
     [user.id]
   );
   return { devices: result.rows };
+});
+
+app.post("/v1/devices/:deviceId/invites/:inviteId/revoke", async (request) => {
+  const user = await requirePrincipal(request, "user");
+  const params = z.object({ deviceId: z.string().uuid(), inviteId: z.string().uuid() }).parse(request.params);
+  const result = await db.query(
+    "UPDATE device_invites i SET revoked_at=now() FROM devices d WHERE i.id=$1 AND i.device_id=$2 AND d.id=i.device_id AND d.owner_id=$3 AND i.revoked_at IS NULL RETURNING i.id",
+    [params.inviteId, params.deviceId, user.id]
+  );
+  if (!result.rowCount) throw Object.assign(new Error("Not found"), { statusCode: 404 });
+  return { revoked: true };
 });
 
 app.post("/v1/devices/heartbeat", async (request) => {
@@ -177,6 +198,16 @@ app.post("/v1/sessions/:sessionId/end", async (request) => {
   emit(p => p.kind === "device" && p.id === session.device_id, { type: "session.ended", sessionId: params.sessionId });
   emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.ended", sessionId: params.sessionId });
   return { status: "ended" };
+});
+
+app.post("/v1/realtime/ticket", async (request, reply) => {
+  const principal = await requirePrincipal(request);
+  const ticket = "gp_ws_" + randomBytes(32).toString("base64url");
+  await db.query(
+    "INSERT INTO realtime_tickets(id,principal_kind,principal_id,owner_id,token_hash,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '30 seconds')",
+    [randomUUID(), principal.kind, principal.id, principal.ownerId ?? null, hashSecret(ticket)]
+  );
+  return reply.code(201).send({ ticket, expiresInSeconds: 30, singleUse: true });
 });
 
 app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
