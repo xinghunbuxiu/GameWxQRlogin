@@ -17,6 +17,7 @@ public final class RemoteSignalingClient {
     public interface Listener {
         void onConnected();
         void onSessionRequested(String sessionId, String requesterId, String reason);
+        void onSignal(String sessionId, JSONObject payload);
         void onDisconnected(String message);
     }
 
@@ -56,6 +57,9 @@ public final class RemoteSignalingClient {
                                 message.optString("requesterId", "未知申请账号"),
                                 message.optString("reason", "远程用户请求连接")
                         );
+                    } else if ("signal".equals(message.optString("type"))) {
+                        JSONObject payload = message.optJSONObject("payload");
+                        if (payload != null) listener.onSignal(message.getString("sessionId"), payload);
                     } else if ("session.ended".equals(message.optString("type"))) {
                         listener.onDisconnected("远程会话已结束");
                     } else if ("error".equals(message.optString("type"))) {
@@ -76,6 +80,33 @@ public final class RemoteSignalingClient {
                 listener.onDisconnected("云端信令连接失败：" + (error.getMessage() == null ? "网络错误" : error.getMessage()));
             }
         });
+    }
+
+    public boolean sendSignal(String sessionId, JSONObject payload) {
+        WebSocket current = socket;
+        if (current == null) return false;
+        JSONObject message = new JSONObject();
+        try {
+            message.put("type", "signal");
+            message.put("sessionId", sessionId);
+            message.put("payload", payload);
+            return current.send(message.toString());
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
+    public boolean sendSessionStarted(String sessionId) {
+        WebSocket current = socket;
+        if (current == null) return false;
+        JSONObject message = new JSONObject();
+        try {
+            message.put("type", "session.started");
+            message.put("sessionId", sessionId);
+            return current.send(message.toString());
+        } catch (Exception error) {
+            return false;
+        }
     }
 
     public void close() {
