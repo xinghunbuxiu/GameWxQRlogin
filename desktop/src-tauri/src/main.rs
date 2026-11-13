@@ -64,7 +64,7 @@ fn find_adb() -> Option<PathBuf> {
     None
 }
 
-fn run_adb(adb: &Path, args: &[&str]) -> Result<String, String> {
+fn run_adb_with_timeout(adb: &Path, args: &[&str], timeout: Duration) -> Result<String, String> {
     let mut child = Command::new(adb)
         .args(args)
         .stdin(Stdio::null())
@@ -86,7 +86,7 @@ fn run_adb(adb: &Path, args: &[&str]) -> Result<String, String> {
         value
     }));
 
-    match child.wait_timeout(Duration::from_secs(8)).map_err(|e| format!("等待 ADB 失败：{e}"))? {
+    match child.wait_timeout(timeout).map_err(|e| format!("等待 ADB 失败：{e}"))? {
         Some(status) => {
             let stdout = stdout_reader.and_then(|handle| handle.join().ok()).unwrap_or_default();
             let stderr = stderr_reader.and_then(|handle| handle.join().ok()).unwrap_or_default();
@@ -105,6 +105,11 @@ fn run_adb(adb: &Path, args: &[&str]) -> Result<String, String> {
         }
     }
 }
+
+fn run_adb(adb: &Path, args: &[&str]) -> Result<String, String> {
+    run_adb_with_timeout(adb, args, Duration::from_secs(8))
+}
+
 
 fn parse_devices(output: &str) -> Vec<AdbDevice> {
     output.lines().skip_while(|line| !line.starts_with("List of devices")).skip(1)
@@ -205,6 +210,27 @@ fn validate_device_serial(serial: &str) -> Result<(), String> {
 
 fn output_value(output: Result<String, String>) -> Option<String> {
     output.ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
+}
+
+#[tauri::command]
+fn install_target_game(serial: String, apk_path: String) -> Result<String, String> {
+    validate_device_serial(&serial)?;
+    let path = PathBuf::from(&apk_path);
+    if path.extension().and_then(|value| value.to_str()).map(|value| !value.eq_ignore_ascii_case("apk")).unwrap_or(true) {
+        return Err("请选择 .apk 格式的安装文件。".to_string());
+    }
+    if !path.is_file() {
+        return Err("APK 文件不存在或不是普通文件。".to_string());
+    }
+    let adb = adb_executable()?;
+    let path_arg = path.to_str().ok_or("APK 路径不是有效的 UTF-8 路径。")?;
+    let output = run_adb_with_timeout(&adb, &["-s", &serial, "install", "-r", path_arg], Duration::from_secs(180))?;
+    let message = output.trim();
+    if message.contains("Success") || message.contains("success") {
+        Ok("APK 安装成功。".to_string())
+    } else {
+        Ok(if message.is_empty() { "ADB 安装命令已完成，请检查设备应用列表。".to_string() } else { message.to_string() })
+    }
 }
 
 #[tauri::command]
@@ -315,7 +341,7 @@ mod tests {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details, launch_target_game])
+        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details, launch_target_game, install_target_game])
         .run(tauri::generate_context!())
         .expect("error while running GamePilot");
 }
