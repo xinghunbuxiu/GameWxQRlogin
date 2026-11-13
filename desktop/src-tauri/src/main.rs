@@ -364,10 +364,10 @@ mod tests {
 
     #[test]
     fn detects_only_exact_target_game_package() {
-        assert!(is_target_game_installed("package:com.myretirementtime.wdylsg\\n"));
+        assert!(is_target_game_installed("package:com.myretirementtime.wdylsg\n"));
         assert!(!is_target_game_installed(""));
-        assert!(!is_target_game_installed("package:com.myretirementtime.wdylsg.debug\\n"));
-        assert!(!is_target_game_installed("package:com.other.game\\n"));
+        assert!(!is_target_game_installed("package:com.myretirementtime.wdylsg.debug\n"));
+        assert!(!is_target_game_installed("package:com.other.game\n"));
     }
 
     #[test]
