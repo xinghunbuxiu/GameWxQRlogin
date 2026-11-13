@@ -75,12 +75,23 @@ fn run_adb(adb: &Path, args: &[&str]) -> Result<String, String> {
         .spawn()
         .map_err(|e| format!("无法启动 ADB：{e}"))?;
 
+    // Drain both pipes concurrently so verbose commands (for example dumpsys)
+    // cannot block on a full OS pipe while the parent waits for process exit.
+    let stdout_reader = child.stdout.take().map(|mut pipe| std::thread::spawn(move || {
+        let mut value = String::new();
+        let _ = pipe.read_to_string(&mut value);
+        value
+    }));
+    let stderr_reader = child.stderr.take().map(|mut pipe| std::thread::spawn(move || {
+        let mut value = String::new();
+        let _ = pipe.read_to_string(&mut value);
+        value
+    }));
+
     match child.wait_timeout(Duration::from_secs(8)).map_err(|e| format!("等待 ADB 失败：{e}"))? {
         Some(status) => {
-            let mut stdout = String::new();
-            let mut stderr = String::new();
-            if let Some(mut pipe) = child.stdout.take() { let _ = pipe.read_to_string(&mut stdout); }
-            if let Some(mut pipe) = child.stderr.take() { let _ = pipe.read_to_string(&mut stderr); }
+            let stdout = stdout_reader.and_then(|handle| handle.join().ok()).unwrap_or_default();
+            let stderr = stderr_reader.and_then(|handle| handle.join().ok()).unwrap_or_default();
             if status.success() { Ok(stdout) }
             else {
                 let detail = stderr.trim();
@@ -90,6 +101,8 @@ fn run_adb(adb: &Path, args: &[&str]) -> Result<String, String> {
         None => {
             let _ = child.kill();
             let _ = child.wait();
+            if let Some(handle) = stdout_reader { let _ = handle.join(); }
+            if let Some(handle) = stderr_reader { let _ = handle.join(); }
             Err("ADB 命令超时（8 秒）".to_string())
         }
     }
