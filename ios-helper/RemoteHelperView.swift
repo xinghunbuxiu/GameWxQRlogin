@@ -5,6 +5,7 @@ import Foundation
 
 private struct PendingRemoteSession: Identifiable {
     let id: String
+    let requesterID: String
     let reason: String
 }
 
@@ -112,7 +113,8 @@ struct RemoteHelperView: View {
                 if object["type"] as? String == "session.requested",
                    let sessionID = object["sessionId"] as? String {
                     let reason = object["reason"] as? String ?? "远程用户请求连接"
-                    await MainActor.run { pendingSession = PendingRemoteSession(id: sessionID, reason: reason) }
+                    let requesterID = object["requesterId"] as? String ?? "未知申请账号"
+                    await MainActor.run { pendingSession = PendingRemoteSession(id: sessionID, requesterID: requesterID, reason: reason) }
                 }
             } catch {
                 await MainActor.run { status = "云端信令已断开：\(error.localizedDescription)"; socket = nil }
