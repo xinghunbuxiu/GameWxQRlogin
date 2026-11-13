@@ -2,6 +2,9 @@ package com.willh.wz;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
+import android.media.projection.MediaProjectionManager;
+import android.os.Build;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
@@ -30,6 +33,8 @@ public class RemoteHelperActivity extends Activity {
     private Button listenButton;
     private RemoteSignalingClient signalingClient;
     private boolean listening;
+    private static final int REQUEST_SCREEN_CAPTURE = 7401;
+    private String approvedSessionId;
     private Button clearButton;
     private boolean deviceRegistered;
 
@@ -214,13 +219,51 @@ public class RemoteHelperActivity extends Activity {
                 RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
                 if (record == null) throw new IllegalStateException("设备凭证不存在");
                 RemoteApiClient.decideSession(record.serverUrl, record.deviceToken, sessionId, approve);
-                runOnUiThread(() -> setStatus(approve
-                        ? "已批准本次连接。当前版本尚未启动屏幕采集和 WebRTC 视频传输。"
-                        : "已拒绝本次远程连接申请。"));
+                runOnUiThread(() -> {
+                    if (approve) {
+                        approvedSessionId = sessionId;
+                        requestScreenCapturePermission();
+                    } else {
+                        setStatus("已拒绝本次远程连接申请。");
+                    }
+                });
             } catch (Exception error) {
                 runOnUiThread(() -> setStatus("提交审批失败：" + safeMessage(error)));
             }
         });
+    }
+
+
+    private void requestScreenCapturePermission() {
+        MediaProjectionManager manager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+        setStatus("远程会话已批准。接下来请在 Android 系统弹窗中确认屏幕共享。");
+        startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_SCREEN_CAPTURE);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_SCREEN_CAPTURE) return;
+        String sessionId = approvedSessionId;
+        approvedSessionId = null;
+        if (resultCode == RESULT_OK && data != null && sessionId != null) {
+            Intent service = new Intent(this, RemoteCaptureService.class);
+            service.setAction(RemoteCaptureService.ACTION_START);
+            service.putExtra(RemoteCaptureService.EXTRA_RESULT_CODE, resultCode);
+            service.putExtra(RemoteCaptureService.EXTRA_RESULT_DATA, data);
+            service.putExtra(RemoteCaptureService.EXTRA_SESSION_ID, sessionId);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(service);
+            else startService(service);
+            setStatus("系统屏幕采集已启动，通知栏可随时停止。当前版本尚未通过 WebRTC 传输画面。");
+        } else if (sessionId != null) {
+            setStatus("你取消了系统屏幕共享授权，正在结束本次会话。");
+            executor.execute(() -> {
+                try {
+                    RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
+                    if (record != null) RemoteApiClient.endSession(record.serverUrl, record.deviceToken, sessionId);
+                } catch (Exception ignored) {}
+            });
+        }
     }
 
     private void sendHeartbeat() {
