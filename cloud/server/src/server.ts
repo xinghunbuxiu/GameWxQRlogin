@@ -172,6 +172,12 @@ app.post("/v1/sessions", async (request, reply) => {
   if (!device || device.status !== "online") return reply.code(409).send({ error: "DEVICE_UNAVAILABLE" });
   if (device.owner_id === user.id) return reply.code(400).send({ error: "CANNOT_REMOTE_CONNECT_OWN_DEVICE" });
   if (![...sockets].some(p => p.principal.kind === "device" && p.principal.id === device.id)) return reply.code(409).send({ error: "DEVICE_NOT_CONNECTED_TO_SIGNALING" });
+  // Expire stale rows before inserting: the partial unique index intentionally
+  // covers statuses, so an expired row must leave the live-status set first.
+  await db.query(
+    "UPDATE remote_sessions SET status='expired' WHERE device_id=$1 AND status IN ('pending','approved','active') AND expires_at<=now()",
+    [device.id]
+  );
   const activeSession = await db.query(
     "SELECT id FROM remote_sessions WHERE device_id=$1 AND status IN ('pending','approved','active') AND expires_at>now() LIMIT 1",
     [device.id]
