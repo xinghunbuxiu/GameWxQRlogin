@@ -157,7 +157,7 @@ app.post("/v1/sessions", async (request, reply) => {
     [id, device.id, user.id, body.reason]
   );
   await record(id, user.id, "session.requested", { reason: body.reason });
-  emit(p => p.kind === "device" && p.id === device.id, { type: "session.requested", sessionId: id, reason: body.reason, expiresInSeconds: 90 });
+  emit(p => p.kind === "device" && p.id === device.id, { type: "session.requested", sessionId: id, requesterId: user.id, reason: body.reason, expiresInSeconds: 90 });
   return reply.code(201).send({ sessionId: id, status: "pending", expiresInSeconds: 90 });
 });
 
@@ -264,6 +264,10 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
         emit(target, { type: "signal", sessionId: message.sessionId, payload: message.payload });
       } else if (message.type === "session.started") {
         if (!isDevice || session.status !== "approved") throw new Error("Only the approved device can start");
+        if (new Date(session.expires_at).getTime() <= Date.now()) {
+          await db.query("UPDATE remote_sessions SET status='expired' WHERE id=$1 AND status='approved'", [message.sessionId]);
+          throw new Error("Approval window expired");
+        }
         await db.query("UPDATE remote_sessions SET status='active',started_at=now(),expires_at=now()+interval '4 hours' WHERE id=$1", [message.sessionId]);
         await record(message.sessionId, principal.id, "session.started");
         emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.started", sessionId: message.sessionId });
