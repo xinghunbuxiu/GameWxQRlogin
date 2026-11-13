@@ -1,6 +1,7 @@
 package com.willh.wz;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
@@ -26,6 +27,9 @@ public class RemoteHelperActivity extends Activity {
     private TextView statusView;
     private Button registerButton;
     private Button heartbeatButton;
+    private Button listenButton;
+    private RemoteSignalingClient signalingClient;
+    private boolean listening;
     private Button clearButton;
     private boolean deviceRegistered;
 
@@ -64,6 +68,12 @@ public class RemoteHelperActivity extends Activity {
         registerButton.setText("注册本设备");
         root.addView(registerButton);
         registerButton.setOnClickListener(v -> registerDevice());
+
+        listenButton = new Button(this);
+        listenButton.setText("连接云端，等待远程申请");
+        listenButton.setEnabled(false);
+        root.addView(listenButton);
+        listenButton.setOnClickListener(v -> toggleSignaling());
 
         heartbeatButton = new Button(this);
         heartbeatButton.setText("发送在线心跳");
@@ -127,6 +137,7 @@ public class RemoteHelperActivity extends Activity {
                     ownerTokenInput.setText("");
                     deviceRegistered = true;
                     setBusy(false);
+                    listenButton.setEnabled(true);
                     setStatus("设备注册成功\n设备 ID：" + registration.deviceId
                             + "\n凭证已加密保存。当前仅完成设备接入，尚未建立远程会话。");
                 });
@@ -135,6 +146,79 @@ public class RemoteHelperActivity extends Activity {
                     setBusy(false);
                     setStatus("注册失败：" + safeMessage(error));
                 });
+            }
+        });
+    }
+
+
+    private void toggleSignaling() {
+        if (listening) {
+            if (signalingClient != null) signalingClient.close();
+            signalingClient = null;
+            listening = false;
+            listenButton.setText("连接云端，等待远程申请");
+            setStatus("已主动断开云端信令连接。");
+            return;
+        }
+        setBusy(true);
+        executor.execute(() -> {
+            try {
+                RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
+                if (record == null) throw new IllegalStateException("本机尚未注册");
+                RemoteSignalingClient client = new RemoteSignalingClient();
+                signalingClient = client;
+                client.connect(record.serverUrl, record.deviceToken, new RemoteSignalingClient.Listener() {
+                    @Override public void onConnected() {
+                        runOnUiThread(() -> {
+                            listening = true;
+                            setBusy(false);
+                            listenButton.setText("断开云端连接");
+                            setStatus("已连接云端，正在等待远程连接申请。\\n每次申请都必须由本机主人确认。");
+                        });
+                    }
+                    @Override public void onSessionRequested(String sessionId, String reason) {
+                        runOnUiThread(() -> showApprovalDialog(sessionId, reason));
+                    }
+                    @Override public void onDisconnected(String message) {
+                        runOnUiThread(() -> {
+                            listening = false;
+                            listenButton.setText("连接云端，等待远程申请");
+                            setBusy(false);
+                            setStatus(message);
+                        });
+                    }
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    listening = false;
+                    setBusy(false);
+                    setStatus("无法连接云端：" + safeMessage(error));
+                });
+            }
+        });
+    }
+
+    private void showApprovalDialog(String sessionId, String reason) {
+        new AlertDialog.Builder(this)
+                .setTitle("远程连接申请")
+                .setMessage("申请原因：" + reason + "\\n\\n是否允许本次连接？")
+                .setCancelable(false)
+                .setPositiveButton("允许本次连接", (dialog, which) -> decideSession(sessionId, true))
+                .setNegativeButton("拒绝", (dialog, which) -> decideSession(sessionId, false))
+                .show();
+    }
+
+    private void decideSession(String sessionId, boolean approve) {
+        executor.execute(() -> {
+            try {
+                RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
+                if (record == null) throw new IllegalStateException("设备凭证不存在");
+                RemoteApiClient.decideSession(record.serverUrl, record.deviceToken, sessionId, approve);
+                runOnUiThread(() -> setStatus(approve
+                        ? "已批准本次连接。当前版本尚未启动屏幕采集和 WebRTC 视频传输。"
+                        : "已拒绝本次远程连接申请。"));
+            } catch (Exception error) {
+                runOnUiThread(() -> setStatus("提交审批失败：" + safeMessage(error)));
             }
         });
     }
@@ -172,6 +256,7 @@ public class RemoteHelperActivity extends Activity {
                     serverInput.setText(record.serverUrl);
                     deviceRegistered = true;
                     heartbeatButton.setEnabled(true);
+                    listenButton.setEnabled(true);
                     setStatus("已保存设备绑定\n设备 ID：" + record.deviceId
                             + "\n点击“发送在线心跳”验证服务器连接。");
                 });
@@ -185,6 +270,10 @@ public class RemoteHelperActivity extends Activity {
         RemoteDeviceStore.clear(this);
         deviceRegistered = false;
         heartbeatButton.setEnabled(false);
+        listenButton.setEnabled(false);
+        if (signalingClient != null) { signalingClient.close(); signalingClient = null; }
+        listening = false;
+        listenButton.setText("连接云端，等待远程申请");
         setStatus("已清除本机保存的云端凭证。服务器端设备记录仍保留，需要由云端管理端另行撤销。");
     }
 
@@ -206,6 +295,7 @@ public class RemoteHelperActivity extends Activity {
         registerButton.setEnabled(!busy);
         heartbeatButton.setEnabled(!busy && deviceRegistered);
         clearButton.setEnabled(!busy && deviceRegistered);
+        listenButton.setEnabled(!busy && deviceRegistered && !listening);
     }
 
     private void setStatus(String text) {
@@ -218,6 +308,7 @@ public class RemoteHelperActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (signalingClient != null) signalingClient.close();
         executor.shutdownNow();
         super.onDestroy();
     }
