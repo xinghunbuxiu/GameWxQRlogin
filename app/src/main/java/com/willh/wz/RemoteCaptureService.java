@@ -68,6 +68,7 @@ public class RemoteCaptureService extends Service {
 
             projection.registerCallback(new MediaProjection.Callback() {
                 @Override public void onStop() {
+                    projection = null;
                     stopCapture(true);
                 }
             }, new Handler(getMainLooper()));
