@@ -55,8 +55,7 @@ public final class RemoteWebRtcSession {
     private boolean remoteDescriptionSet;
     private boolean released;
     private final Handler connectionHandler = new Handler(Looper.getMainLooper());
-    private final Runnable disconnectedTimeout = () ->
-            listener.onFailure("WebRTC ICE 连接持续断开超过 15 秒，已停止屏幕共享");
+    private final Runnable disconnectedTimeout;
 
     public RemoteWebRtcSession(Context context, String sessionId, Intent projectionPermissionData,
                                RemoteSignalingClient signaling, Listener listener,
@@ -66,6 +65,8 @@ public final class RemoteWebRtcSession {
         this.projectionPermissionData = projectionPermissionData;
         this.signaling = signaling;
         this.listener = listener;
+        this.disconnectedTimeout = () ->
+                this.listener.onFailure("WebRTC ICE 连接持续断开超过 15 秒，已停止屏幕共享");
         this.width = width;
         this.height = height;
         this.fps = fps;
