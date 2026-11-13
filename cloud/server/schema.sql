@@ -50,3 +50,15 @@ CREATE TABLE IF NOT EXISTS device_invites (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS device_invites_device_idx ON device_invites(device_id, expires_at);
+
+CREATE TABLE IF NOT EXISTS realtime_tickets (
+  id UUID PRIMARY KEY,
+  principal_kind TEXT NOT NULL CHECK (principal_kind IN ('user', 'device')),
+  principal_id TEXT NOT NULL,
+  owner_id TEXT,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS realtime_tickets_expiry_idx ON realtime_tickets(expires_at);
