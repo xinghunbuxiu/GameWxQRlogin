@@ -300,13 +300,20 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
                 if (!TextUtils.isEmpty(url)) {
                     GameInfo gameInfo = mCurrentGame;
                     if (url.startsWith(gameInfo.appId)) {
-                        // OAuth redirect received. Do not fabricate a WeChat SDK response
-                        // or claim that the game accepted the authorization.
-                        runOnUiThread(() -> Toast.makeText(
-                                MainActivity.this,
-                                "已收到微信授权返回；请以游戏官方登录结果为准",
-                                Toast.LENGTH_LONG
-                        ).show());
+                        // Forward the original OAuth redirect URI to the game's exported
+                        // callback Activity. Do not synthesize WeChat SDK Bundle fields.
+                        Intent callback = new Intent(Intent.ACTION_VIEW);
+                        callback.setComponent(new ComponentName(gameInfo.pkg, gameInfo.cls));
+                        callback.setData(Uri.parse(url));
+                        if (isIntentSafe(callback)) {
+                            startActivity(callback);
+                        } else {
+                            runOnUiThread(() -> Toast.makeText(
+                                    MainActivity.this,
+                                    "游戏授权回调入口不可用，请确认已安装官方游戏",
+                                    Toast.LENGTH_LONG
+                            ).show());
+                        }
                         return true;
                     } else if (!url.startsWith("http://") && !url.startsWith("https://")) {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
