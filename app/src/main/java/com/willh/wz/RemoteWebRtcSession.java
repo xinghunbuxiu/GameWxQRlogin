@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.media.projection.MediaProjection;
 
 import org.json.JSONObject;
-import org.webrtc.CameraVideoCapturer;
 import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
@@ -21,7 +20,6 @@ import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -68,7 +66,7 @@ public final class RemoteWebRtcSession {
 
     public void start() {
         try {
-            initializeFactory();
+            initializeFactory(context);
             eglBase = EglBase.create();
             factory = PeerConnectionFactory.builder()
                     .setVideoEncoderFactory(new DefaultVideoEncoderFactory(eglBase.getEglBaseContext(), true, true))
@@ -78,7 +76,6 @@ public final class RemoteWebRtcSession {
             PeerConnection.IceServer stun = PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer();
             PeerConnection.RTCConfiguration configuration = new PeerConnection.RTCConfiguration(Collections.singletonList(stun));
             configuration.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN;
-            configuration.continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY;
 
             peerConnection = factory.createPeerConnection(configuration, new PeerConnection.Observer() {
                 @Override public void onSignalingChange(PeerConnection.SignalingState state) {}
@@ -201,10 +198,10 @@ public final class RemoteWebRtcSession {
         pendingRemoteCandidates.clear();
     }
 
-    private static synchronized void initializeFactory() {
+    private static synchronized void initializeFactory(Context context) {
         if (factoryInitialized) return;
         PeerConnectionFactory.initialize(
-                PeerConnectionFactory.InitializationOptions.builder(GamePilotApplicationContext.get())
+                PeerConnectionFactory.InitializationOptions.builder(context)
                         .createInitializationOptions()
         );
         factoryInitialized = true;
