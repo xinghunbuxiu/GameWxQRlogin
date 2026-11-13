@@ -23,7 +23,7 @@ function App() {
   const [pairAddress, setPairAddress] = useState("");
   const [pairingCode, setPairingCode] = useState("");
   const [connectAddress, setConnectAddress] = useState("");
-  const [actionBusy, setActionBusy] = useState<"pair" | "connect" | null>(null);
+  const [actionBusy, setActionBusy] = useState<"pair" | "connect" | "disconnect" | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState("正在初始化 ADB 设备通道…");
   const current = nav.find(item => item.id === section)!;
