@@ -277,6 +277,10 @@ fn uninstall_target_game(serial: String) -> Result<String, String> {
     }
 }
 
+fn is_target_game_installed(output: &str) -> bool {
+    output.lines().any(|line| line.trim() == format!("package:{}", TARGET_GAME_PACKAGE))
+}
+
 #[tauri::command]
 fn get_adb_device_details(serial: String) -> Result<AdbDeviceDetails, String> {
     validate_device_serial(&serial)?;
@@ -289,10 +293,15 @@ fn get_adb_device_details(serial: String) -> Result<AdbDeviceDetails, String> {
     let foreground_activity = activity_output.and_then(|value| value.lines()
         .find(|line| line.contains("mResumedActivity") || line.contains("topResumedActivity"))
         .map(|line| line.trim().to_string()));
-    let package_output = run_adb(&adb, &["-s", &serial, "shell", "pm", "path", TARGET_GAME_PACKAGE])?;
-    let game_apk_path = package_output.lines()
-        .find_map(|line| line.trim().strip_prefix("package:").map(str::to_string));
-    let game_installed = game_apk_path.is_some();
+    let package_list = run_adb(&adb, &["-s", &serial, "shell", "pm", "list", "packages", TARGET_GAME_PACKAGE])?;
+    let game_installed = is_target_game_installed(&package_list);
+    let game_apk_path = if game_installed {
+        let package_output = run_adb(&adb, &["-s", &serial, "shell", "pm", "path", TARGET_GAME_PACKAGE])?;
+        package_output.lines()
+            .find_map(|line| line.trim().strip_prefix("package:").map(str::to_string))
+    } else {
+        None
+    };
     Ok(AdbDeviceDetails { serial, model, android_version, screen_resolution, foreground_activity, game_installed, game_apk_path })
 }
 
@@ -337,7 +346,7 @@ fn adb_disconnect(address: String) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_adb_endpoint, TARGET_GAME_PACKAGE};
+    use super::{is_target_game_installed, validate_adb_endpoint, TARGET_GAME_PACKAGE};
 
     #[test]
     fn validates_device_serials_without_shell_metacharacters() {
@@ -351,6 +360,14 @@ mod tests {
     #[test]
     fn target_game_package_is_fixed() {
         assert_eq!(TARGET_GAME_PACKAGE, "com.myretirementtime.wdylsg");
+    }
+
+    #[test]
+    fn detects_only_exact_target_game_package() {
+        assert!(is_target_game_installed("package:com.myretirementtime.wdylsg\\n"));
+        assert!(!is_target_game_installed(""));
+        assert!(!is_target_game_installed("package:com.myretirementtime.wdylsg.debug\\n"));
+        assert!(!is_target_game_installed("package:com.other.game\\n"));
     }
 
     #[test]
