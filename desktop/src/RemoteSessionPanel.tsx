@@ -126,9 +126,11 @@ export default function RemoteSessionPanel() {
   };
 
   const startViewerPeer = async (id: string, socket: WebSocket) => {
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }]
-    });
+    const iceConfig = await api<{ iceServers: RTCIceServer[]; turnEnabled: boolean }>("/v1/turn/credentials");
+    const peer = new RTCPeerConnection({ iceServers: iceConfig.iceServers });
+    setStatus(iceConfig.turnEnabled
+      ? "设备主人已批准，TURN 临时凭证已就绪，正在协商 WebRTC…"
+      : "设备主人已批准，当前使用 STUN 直连；服务器尚未配置 TURN 中继。");
     peerRef.current = peer;
     peer.addTransceiver("video", { direction: "recvonly" });
     peer.ontrack = event => {
