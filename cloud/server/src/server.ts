@@ -242,6 +242,7 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
       ]);
       const message = z.discriminatedUnion("type", [
         z.object({ type: z.literal("signal"), sessionId: z.string().uuid(), payload: signalPayload }).strict(),
+        z.object({ type: z.literal("session.ready"), sessionId: z.string().uuid() }).strict(),
         z.object({ type: z.literal("session.started"), sessionId: z.string().uuid() }).strict(),
         z.object({ type: z.literal("session.ended"), sessionId: z.string().uuid() }).strict()
       ]).parse(JSON.parse(data.toString("utf8")));
@@ -262,6 +263,10 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
         }
         const target = (p: Principal) => isDevice ? p.kind === "user" && p.id === session.requester_id : p.kind === "device" && p.id === session.device_id;
         emit(target, { type: "signal", sessionId: message.sessionId, payload: message.payload });
+      } else if (message.type === "session.ready") {
+        if (!isDevice || session.status !== "approved") throw new Error("Only the approved device can signal readiness");
+        if (new Date(session.expires_at).getTime() <= Date.now()) throw new Error("Approval window expired");
+        emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.ready", sessionId: message.sessionId });
       } else if (message.type === "session.started") {
         if (!isDevice || session.status !== "approved") throw new Error("Only the approved device can start");
         if (new Date(session.expires_at).getTime() <= Date.now()) {
