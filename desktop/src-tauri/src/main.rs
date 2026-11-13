@@ -150,9 +150,70 @@ fn get_adb_snapshot() -> AdbSnapshot {
     }
 }
 
+
+fn validate_adb_endpoint(value: &str) -> Result<(), String> {
+    if value.is_empty() || value.len() > 255 || value.chars().any(char::is_whitespace) || value.contains("://") {
+        return Err("地址格式无效，请填写主机名或 IP:端口。".to_string());
+    }
+    let (host, port) = if let Some(rest) = value.strip_prefix('[') {
+        let (ipv6, suffix) = rest.split_once(']').ok_or("IPv6 地址缺少右方括号。")?;
+        let port = suffix.strip_prefix(':').ok_or("地址必须包含端口。")?;
+        if ipv6.parse::<std::net::Ipv6Addr>().is_err() {
+            return Err("IPv6 地址格式无效。".to_string());
+        }
+        (ipv6, port)
+    } else {
+        value.split_once(':').ok_or("地址必须采用 主机:端口 格式。")?
+    };
+    if host.is_empty() || host.len() > 200 || !host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
+        return Err("主机名格式无效。IPv6 请使用 [地址]:端口 格式。".to_string());
+    }
+    let port_number = port.parse::<u16>().map_err(|_| "端口必须是 1 到 65535 之间的数字。")?;
+    if port_number == 0 { return Err("端口不能为 0。".to_string()); }
+    Ok(())
+}
+
+fn adb_executable() -> Result<PathBuf, String> {
+    find_adb().ok_or_else(|| "未找到 ADB。请安装 Android SDK Platform-Tools，并将 adb 加入 PATH。".to_string())
+}
+
+#[tauri::command]
+fn adb_pair(address: String, pairing_code: String) -> Result<String, String> {
+    validate_adb_endpoint(&address)?;
+    if pairing_code.len() < 4 || pairing_code.len() > 12 || !pairing_code.chars().all(|c| c.is_ascii_digit()) {
+        return Err("配对码应为 4 到 12 位数字。".to_string());
+    }
+    let adb = adb_executable()?;
+    let result = run_adb(&adb, &["pair", &address, &pairing_code]);
+    result.map(|output| {
+        let text = output.trim();
+        if text.is_empty() { "ADB 配对命令已完成，请检查手机上的配对状态。".to_string() } else { text.to_string() }
+    }).map_err(|error| error.replace(&pairing_code, "[已隐藏]"))
+}
+
+#[tauri::command]
+fn adb_connect(address: String) -> Result<String, String> {
+    validate_adb_endpoint(&address)?;
+    let adb = adb_executable()?;
+    run_adb(&adb, &["connect", &address]).map(|output| {
+        let text = output.trim();
+        if text.is_empty() { "ADB connect 命令已完成。".to_string() } else { text.to_string() }
+    })
+}
+
+#[tauri::command]
+fn adb_disconnect(address: String) -> Result<String, String> {
+    validate_adb_endpoint(&address)?;
+    let adb = adb_executable()?;
+    run_adb(&adb, &["disconnect", &address]).map(|output| {
+        let text = output.trim();
+        if text.is_empty() { "ADB disconnect 命令已完成。".to_string() } else { text.to_string() }
+    })
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_adb_snapshot])
+        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect])
         .run(tauri::generate_context!())
         .expect("error while running GamePilot");
 }
