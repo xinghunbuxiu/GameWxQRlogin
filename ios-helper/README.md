@@ -1,6 +1,6 @@
 # GamePilot iOS Helper — ReplayKit extension scaffold
 
-This directory contains the first native iOS Broadcast Upload Extension source. It is not yet a complete iOS app or a working WebRTC sender.
+This directory contains the first native iOS Helper source: Keychain credential storage, HTTPS API client, approval UI, WSS request listener, ReplayKit picker, and Broadcast Upload Extension lifecycle. It is not yet a complete Xcode project or a working WebRTC sender.
 
 ## Xcode target setup
 
@@ -20,7 +20,7 @@ This directory contains the first native iOS Broadcast Upload Extension source. 
 
 ## Next implementation
 
-1. Add OIDC Authorization Code + PKCE in the containing app and store the device credential in Keychain.
+1. Replace the pasted owner JWT with OIDC Authorization Code + PKCE in the containing app; the device credential is already stored in Keychain.
 2. Implement the same one-time WSS ticket protocol as Android.
 3. Add a reviewed WebRTC iOS dependency and create an RTCVideoSource / RTCVideoTrack adapter for ReplayKit sample buffers.
 4. Add owner approval UI before presenting the ReplayKit broadcast picker.
