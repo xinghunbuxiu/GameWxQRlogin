@@ -210,6 +210,15 @@ fn output_value(output: Result<String, String>) -> Option<String> {
 }
 
 #[tauri::command]
+fn launch_target_game(serial: String) -> Result<String, String> {
+    validate_device_serial(&serial)?;
+    let adb = adb_executable()?;
+    let output = run_adb(&adb, &["-s", &serial, "shell", "monkey", "-p", "com.myretirementtime.wdylsg", "1"])?;
+    let message = output.trim();
+    Ok(if message.is_empty() { "已发送启动《我的养老时光》指令。".to_string() } else { message.to_string() })
+}
+
+#[tauri::command]
 fn get_adb_device_details(serial: String) -> Result<AdbDeviceDetails, String> {
     validate_device_serial(&serial)?;
     let adb = adb_executable()?;
@@ -309,7 +318,7 @@ mod tests {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details])
+        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details, launch_target_game])
         .run(tauri::generate_context!())
         .expect("error while running GamePilot");
 }
