@@ -184,6 +184,9 @@ public class RemoteHelperActivity extends Activity {
                     @Override public void onSessionRequested(String sessionId, String requesterId, String reason) {
                         runOnUiThread(() -> showApprovalDialog(sessionId, requesterId, reason));
                     }
+                    @Override public void onSignal(String sessionId, org.json.JSONObject payload) {
+                        // WebRTC signaling is handled by the capture foreground service.
+                    }
                     @Override public void onDisconnected(String message) {
                         runOnUiThread(() -> {
                             listening = false;
