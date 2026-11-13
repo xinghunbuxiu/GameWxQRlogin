@@ -37,11 +37,11 @@ User API calls require a bearer JWT issued by the configured identity provider. 
 
 `pending -> approved -> active -> ended`
 
-Alternative terminal states: `rejected`, `expired`. A request expires after 90 seconds. There is no unattended or silent-connect mode.
+Alternative terminal states: `rejected`, `expired`. A pending request expires after 90 seconds. Once approved, the setup window lasts 5 minutes; an active session is capped at 4 hours. There is no unattended or silent-connect mode.
 
 1. Owner registers a Helper: `POST /v1/devices/register`.
 2. Helper heartbeats: `POST /v1/devices/heartbeat`.
-3. Owner creates a share token: `POST /v1/devices/:deviceId/invites` (1–30 day expiry). The raw token is returned once; only its hash is stored. Revoke it with `POST /v1/devices/:deviceId/invites/:inviteId/revoke`.
+3. Owner creates a share token: `POST /v1/devices/:deviceId/invites` (1–30 day expiry). The response contains `inviteId` and the raw token (returned once); only its hash is stored. Revoke it with `POST /v1/devices/:deviceId/invites/:inviteId/revoke`.
 4. Remote user receives the token out-of-band and asks for a session: `POST /v1/sessions` with `{ inviteToken, reason }`. The device must also have a live signaling connection.
 5. Each participant obtains a one-time 30-second WebSocket ticket from `POST /v1/realtime/ticket`, then connects to `/v1/realtime?ticket=...`. Device receives `session.requested` and the owner explicitly approves or rejects via `POST /v1/sessions/:id/decision`.
 6. Once approved, participants exchange WebRTC signaling messages over the authenticated WebSocket.
