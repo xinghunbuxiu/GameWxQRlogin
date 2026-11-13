@@ -3,6 +3,8 @@ package com.willh.wz;
 import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjection;
+import android.os.Handler;
+import android.os.Looper;
 
 import org.json.JSONObject;
 import org.webrtc.DefaultVideoDecoderFactory;
@@ -52,6 +54,9 @@ public final class RemoteWebRtcSession {
     private VideoTrack videoTrack;
     private boolean remoteDescriptionSet;
     private boolean released;
+    private final Handler connectionHandler = new Handler(Looper.getMainLooper());
+    private final Runnable disconnectedTimeout = () ->
+            listener.onFailure("WebRTC ICE 连接持续断开超过 15 秒，已停止屏幕共享");
 
     public RemoteWebRtcSession(Context context, String sessionId, Intent projectionPermissionData,
                                RemoteSignalingClient signaling, Listener listener,
@@ -93,8 +98,14 @@ public final class RemoteWebRtcSession {
                 @Override public void onIceConnectionChange(PeerConnection.IceConnectionState state) {
                     if (state == PeerConnection.IceConnectionState.CONNECTED
                             || state == PeerConnection.IceConnectionState.COMPLETED) {
+                        connectionHandler.removeCallbacks(disconnectedTimeout);
                         listener.onConnected();
-                    } else if (state == PeerConnection.IceConnectionState.FAILED) {
+                    } else if (state == PeerConnection.IceConnectionState.DISCONNECTED) {
+                        connectionHandler.removeCallbacks(disconnectedTimeout);
+                        connectionHandler.postDelayed(disconnectedTimeout, 15_000L);
+                    } else if (state == PeerConnection.IceConnectionState.FAILED
+                            || state == PeerConnection.IceConnectionState.CLOSED) {
+                        connectionHandler.removeCallbacks(disconnectedTimeout);
                         listener.onFailure("WebRTC ICE 连接中断：" + state.name());
                     }
                 }
@@ -213,6 +224,7 @@ public final class RemoteWebRtcSession {
     public synchronized void release() {
         if (released) return;
         released = true;
+        connectionHandler.removeCallbacks(disconnectedTimeout);
         if (screenCapturer != null) {
             try { screenCapturer.stopCapture(); } catch (Exception ignored) { Thread.currentThread().interrupt(); }
             screenCapturer.dispose();
