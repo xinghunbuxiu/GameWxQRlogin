@@ -211,6 +211,42 @@ fn adb_disconnect(address: String) -> Result<String, String> {
     })
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::validate_adb_endpoint;
+
+    #[test]
+    fn accepts_ipv4_and_hostname_endpoints() {
+        assert!(validate_adb_endpoint("192.168.1.20:37123").is_ok());
+        assert!(validate_adb_endpoint("android-device.local:5555").is_ok());
+    }
+
+    #[test]
+    fn accepts_bracketed_ipv6_endpoint() {
+        assert!(validate_adb_endpoint("[2001:db8::1]:5555").is_ok());
+    }
+
+    #[test]
+    fn rejects_missing_or_invalid_ports() {
+        assert!(validate_adb_endpoint("192.168.1.20").is_err());
+        assert!(validate_adb_endpoint("192.168.1.20:0").is_err());
+        assert!(validate_adb_endpoint("192.168.1.20:abc").is_err());
+    }
+
+    #[test]
+    fn rejects_shell_like_or_url_input() {
+        assert!(validate_adb_endpoint("host:5555;whoami").is_err());
+        assert!(validate_adb_endpoint("tcp://host:5555").is_err());
+        assert!(validate_adb_endpoint("host name:5555").is_err());
+    }
+
+    #[test]
+    fn rejects_unbracketed_ipv6() {
+        assert!(validate_adb_endpoint("2001:db8::1:5555").is_err());
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect])
