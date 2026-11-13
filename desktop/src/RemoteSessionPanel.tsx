@@ -209,6 +209,10 @@ export default function RemoteSessionPanel() {
             const message = JSON.parse(String(event.data)) as Record<string, unknown>;
             if (message.type === "session.approved") {
               const id = String(message.sessionId ?? sessionRef.current ?? "");
+              if (id) { sessionRef.current = id; setSessionId(id); }
+              setStatus("设备主人已批准，等待设备完成系统屏幕共享授权…");
+            } else if (message.type === "session.ready") {
+              const id = String(message.sessionId ?? sessionRef.current ?? "");
               if (id) { sessionRef.current = id; setSessionId(id); await startViewerPeer(id, socket!); }
             } else if (message.type === "session.rejected") {
               setStatus("设备主人拒绝了本次连接。");
