@@ -126,8 +126,11 @@ public class RemoteCaptureService extends Service {
                                                 }
                                                 @Override public void onConnected() {
                                                     if (!sessionStarted) {
+                                                        if (!client.sendSessionStarted(sessionId)) {
+                                                            stopCapture(true);
+                                                            return;
+                                                        }
                                                         sessionStarted = true;
-                                                        client.sendSessionStarted(sessionId);
                                                         Log.i(TAG, "WebRTC screen session connected");
                                                     }
                                                 }
