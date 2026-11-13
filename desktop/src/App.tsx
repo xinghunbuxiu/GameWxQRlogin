@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Activity, AlertCircle, Bot, Cable, CheckCircle2, CircleHelp, Command, Gamepad2, LayoutDashboard, ListChecks, LoaderCircle, MonitorSmartphone, Plus, RefreshCw, Settings2, ShieldCheck, Smartphone, TerminalSquare, Wifi } from "lucide-react";
+import { Activity, AlertCircle, Bot, Cable, CheckCircle2, CircleHelp, Command, Gamepad2, KeyRound, LayoutDashboard, Link2, ListChecks, LoaderCircle, MonitorSmartphone, Plus, RefreshCw, Settings2, ShieldCheck, Smartphone, TerminalSquare, Wifi } from "lucide-react";
 
 type Section = "overview" | "devices" | "tasks" | "scripts" | "logs" | "settings";
 type AdbDevice = { serial: string; state: string; model: string | null; product: string | null; device: string | null; transportId: string | null };
@@ -20,6 +20,11 @@ function App() {
   const [snapshot, setSnapshot] = useState<AdbSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastChecked, setLastChecked] = useState<string | null>(null);
+  const [pairAddress, setPairAddress] = useState("");
+  const [pairingCode, setPairingCode] = useState("");
+  const [connectAddress, setConnectAddress] = useState("");
+  const [actionBusy, setActionBusy] = useState<"pair" | "connect" | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState("正在初始化 ADB 设备通道…");
   const current = nav.find(item => item.id === section)!;
 
@@ -38,6 +43,36 @@ function App() {
   }, []);
 
   useEffect(() => { void refreshDevices(); }, [refreshDevices]);
+
+
+  const pairWirelessDevice = async () => {
+    setActionBusy("pair");
+    setActionMessage(null);
+    try {
+      const result = await invoke<string>("adb_pair", { address: pairAddress.trim(), pairingCode });
+      setActionMessage(result);
+      setPairingCode("");
+      await refreshDevices();
+    } catch (error) {
+      setActionMessage(`配对失败：${String(error)}`);
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const connectWirelessDevice = async () => {
+    setActionBusy("connect");
+    setActionMessage(null);
+    try {
+      const result = await invoke<string>("adb_connect", { address: connectAddress.trim() });
+      setActionMessage(result);
+      await refreshDevices();
+    } catch (error) {
+      setActionMessage(`连接失败：${String(error)}`);
+    } finally {
+      setActionBusy(null);
+    }
+  };
 
   const onlineCount = snapshot?.devices.filter(device => device.state === "device").length ?? 0;
   const connectionLabel = !snapshot ? "检测中" : !snapshot.available ? "不可用" : onlineCount ? "已连接" : "待连接";
@@ -75,8 +110,28 @@ function App() {
         </> : section === "devices" ? <div className="panel device-panel">
           <div className="panel-title"><div><h2>ADB 设备</h2><p>{snapshot?.adbPath ? `执行文件：${snapshot.adbPath}` : "自动探测 Android SDK Platform-Tools 与 PATH"}</p></div><span className={snapshot?.available ? "state-pill ready" : "state-pill"}>{snapshot?.available ? "ADB 可用" : "ADB 未就绪"}</span></div>
           <div className="adb-meta"><span>版本：{snapshot?.version ?? "—"}</span><span>最近扫描：{lastChecked ?? "—"}</span><span>设备数：{snapshot?.devices.length ?? 0}</span></div>
-          {snapshot?.devices.length ? <DeviceList devices={snapshot.devices}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或使用 Android 无线调试配对后刷新。"}</span></div>}
-          <div className="callout"><b>连接提示</b><span>USB：手机开启开发者选项和 USB 调试，连接电脑并在手机上确认 RSA 授权。</span><span>无线：先在 Android「无线调试」中完成配对；配对和连接地址功能将在下一步接入。</span><span>安全：当前版本只执行 adb version 与 adb devices -l，不执行任意 Shell 指令。</span></div>
+          <div className="wireless-grid">
+            <form className="wireless-form" onSubmit={event => { event.preventDefault(); void pairWirelessDevice(); }}>
+              <div className="wireless-heading"><KeyRound size={16}/><b>无线调试配对</b></div>
+              <p>在手机「开发者选项 → 无线调试 → 使用配对码配对设备」中查看配对 IP 和端口。</p>
+              <label>配对地址（IP:配对端口）</label>
+              <input value={pairAddress} onChange={event => setPairAddress(event.target.value)} placeholder="例如 192.168.1.20:37123" autoComplete="off"/>
+              <label>六位配对码</label>
+              <input value={pairingCode} onChange={event => setPairingCode(event.target.value)} placeholder="输入手机显示的配对码" type="password" inputMode="numeric" autoComplete="off"/>
+              <button className="secondary" type="submit" disabled={!snapshot?.available || !pairAddress.trim() || !pairingCode || actionBusy !== null}>{actionBusy === "pair" ? <LoaderCircle size={14} className="spin"/> : <KeyRound size={14}/>} 开始配对</button>
+            </form>
+            <form className="wireless-form" onSubmit={event => { event.preventDefault(); void connectWirelessDevice(); }}>
+              <div className="wireless-heading"><Link2 size={16}/><b>连接无线设备</b></div>
+              <p>配对成功后，在手机无线调试页面查看「IP 地址和端口」，注意这是连接端口，不是配对端口。</p>
+              <label>连接地址（IP:连接端口）</label>
+              <input value={connectAddress} onChange={event => setConnectAddress(event.target.value)} placeholder="例如 192.168.1.20:42817" autoComplete="off"/>
+              <div className="wireless-spacer"/>
+              <button className="secondary" type="submit" disabled={!snapshot?.available || !connectAddress.trim() || actionBusy !== null}>{actionBusy === "connect" ? <LoaderCircle size={14} className="spin"/> : <Wifi size={14}/>} 连接设备</button>
+            </form>
+          </div>
+          {actionMessage && <div className="action-message"><AlertCircle size={14}/><span>{actionMessage}</span></div>}
+          {snapshot?.devices.length ? <DeviceList devices={snapshot.devices}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或按上方步骤完成无线配对和连接。"}</span></div>}
+          <div className="callout"><b>连接提示</b><span>USB：手机开启开发者选项和 USB 调试，连接电脑并在手机上确认 RSA 授权。</span><span>无线：配对端口与连接端口不同；先配对，再使用手机页面显示的连接端口执行连接。</span><span>安全：配对码仅用于本次配对，不持久化；所有操作均通过固定 ADB 子命令执行，不提供任意 Shell。</span></div>
         </div> : <div className="panel section-placeholder"><div className="empty-icon">{(() => { const Icon = current.icon; return <Icon size={25}/>; })()}</div><h2>{current.label}模块</h2><p>页面骨架已建立，等待对应设备服务和数据接口接入。</p></div>}
       </section>
     </main>
