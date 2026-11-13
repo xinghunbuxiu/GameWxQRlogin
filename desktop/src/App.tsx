@@ -176,9 +176,9 @@ function App() {
             </form>
           </div>
           {actionMessage && <div className="action-message"><AlertCircle size={14}/><span>{actionMessage}</span></div>}
-          {snapshot?.devices.length ? {detailsLoading && <div className="action-message"><LoaderCircle size={14} className="spin"/>正在读取设备信息…</div>}
+          {detailsLoading && <div className="action-message"><LoaderCircle size={14} className="spin"/>正在读取设备信息…</div>}
           {deviceDetails && <div className="details-panel"><div className="panel-title"><div><h2>设备详情</h2><p>{deviceDetails.serial}</p></div><button className="text-button" onClick={() => setDeviceDetails(null)}>收起</button></div><div className="details-grid"><Detail label="设备型号" value={deviceDetails.model}/><Detail label="Android 版本" value={deviceDetails.androidVersion}/><Detail label="屏幕分辨率" value={deviceDetails.screenResolution}/><Detail label="前台 Activity" value={deviceDetails.foregroundActivity}/></div></div>}
-          <DeviceList devices={snapshot.devices} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} busy={actionBusy === "disconnect"}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或按上方步骤完成无线配对和连接。"}</span></div>}
+          {snapshot?.devices.length ? <DeviceList devices={snapshot.devices} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} onLaunch={launchTargetGame} busy={actionBusy !== null}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或按上方步骤完成无线配对和连接。"}</span></div>}
           <div className="callout"><b>连接提示</b><span>USB：手机开启开发者选项和 USB 调试，连接电脑并在手机上确认 RSA 授权。</span><span>无线：配对端口与连接端口不同；先配对，再使用手机页面显示的连接端口执行连接。</span><span>安全：配对码仅用于本次配对，不持久化；所有操作均通过固定 ADB 子命令执行，不提供任意 Shell。</span></div>
         </div> : <div className="panel section-placeholder"><div className="empty-icon">{(() => { const Icon = current.icon; return <Icon size={25}/>; })()}</div><h2>{current.label}模块</h2><p>页面骨架已建立，等待对应设备服务和数据接口接入。</p></div>}
       </section>
