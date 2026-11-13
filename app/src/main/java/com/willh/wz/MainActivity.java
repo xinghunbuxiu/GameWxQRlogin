@@ -185,12 +185,16 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
         getMenuInflater().inflate(R.menu.main, menu);
         mRefreshItem = menu.findItem(R.id.refresh);
         menu.add(Menu.NONE, 9001, 100, "自定义游戏诊断");
+        menu.add(Menu.NONE, 9002, 101, "GamePilot 远程设备");
         return super.onCreateOptionsMenu(menu);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == 9001) {
+        if (item.getItemId() == 9002) {
+            startActivity(new Intent(this, RemoteHelperActivity.class));
+            return true;
+        } else if (item.getItemId() == 9001) {
             startActivity(new Intent(this, GameDiagnosticsActivity.class));
             return true;
         } else if (item.getItemId() == R.id.refresh) {
