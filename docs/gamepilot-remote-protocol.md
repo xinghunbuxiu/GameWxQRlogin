@@ -33,7 +33,7 @@ The server must reject signaling unless the session is approved or active. Every
 
 - WebSocket is used only for authenticated signaling and lifecycle events. Clients obtain a single-use 30-second ticket over authenticated HTTPS, then connect with that ticket; browser WebSocket clients do not rely on custom Authorization headers.
 - WebRTC carries screen video and (where platform policy permits) a DataChannel.
-- STUN is attempted first. TURN/TLS is the fallback for restrictive NAT/firewalls.
+- Authenticated GET /v1/turn/credentials returns STUN and, when configured, short-lived coturn REST credentials. TURN credentials use HMAC-SHA1 with the server-side shared secret and a bounded TTL; the secret is never returned to clients.
 - Use short-lived TURN credentials; never embed permanent TURN secrets in a Helper.
 - Screen media uses WebRTC's DTLS-SRTP encryption.
 - The viewer cannot inject platform actions unless the Helper advertises and locally enables the corresponding capability.
