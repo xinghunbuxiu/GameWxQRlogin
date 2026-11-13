@@ -96,6 +96,19 @@ public final class RemoteSignalingClient {
         }
     }
 
+    public boolean sendSessionReady(String sessionId) {
+        WebSocket current = socket;
+        if (current == null) return false;
+        JSONObject message = new JSONObject();
+        try {
+            message.put("type", "session.ready");
+            message.put("sessionId", sessionId);
+            return current.send(message.toString());
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
     public boolean sendSessionStarted(String sessionId) {
         WebSocket current = socket;
         if (current == null) return false;
