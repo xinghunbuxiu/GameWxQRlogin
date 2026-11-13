@@ -306,7 +306,7 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
                         Intent intent = new Intent();
                         intent.setAction(Intent.ACTION_VIEW);
                         intent.setComponent(new ComponentName(gameInfo.pkg, gameInfo.cls));
-                        intent.putExtras(LoginUtil.generateOAuthBundle(url));
+                        intent.putExtras(LoginUtil.generateBundle(url));
                         if (isIntentSafe(intent)) {
                             startActivity(intent);
                         }
