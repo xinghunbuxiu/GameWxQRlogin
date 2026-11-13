@@ -210,7 +210,7 @@ public final class RemoteWebRtcSession {
         if (released) return;
         released = true;
         if (screenCapturer != null) {
-            try { screenCapturer.stopCapture(); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            try { screenCapturer.stopCapture(); } catch (Exception ignored) { Thread.currentThread().interrupt(); }
             screenCapturer.dispose();
             screenCapturer = null;
         }
