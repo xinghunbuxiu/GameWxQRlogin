@@ -116,6 +116,11 @@ public class RemoteCaptureService extends Service {
                                     projectionPermissionData,
                                     client,
                                     new RemoteWebRtcSession.Listener() {
+                                        @Override public void onReady() {
+                                            if (!client.sendSessionReady(sessionId)) {
+                                                stopCapture(true);
+                                            }
+                                        }
                                         @Override public void onConnected() {
                                             if (!sessionStarted) {
                                                 sessionStarted = true;
