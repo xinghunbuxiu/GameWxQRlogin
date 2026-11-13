@@ -94,6 +94,16 @@ fn find_scrcpy() -> Option<PathBuf> {
             if is_executable_file(&candidate) { return Some(candidate); }
         }
     }
+    #[cfg(target_os = "macos")]
+    for candidate in ["/opt/homebrew/bin/scrcpy", "/usr/local/bin/scrcpy"] {
+        let path = PathBuf::from(candidate);
+        if is_executable_file(&path) { return Some(path); }
+    }
+    #[cfg(target_os = "linux")]
+    for candidate in ["/usr/bin/scrcpy", "/usr/local/bin/scrcpy"] {
+        let path = PathBuf::from(candidate);
+        if is_executable_file(&path) { return Some(path); }
+    }
     None
 }
 
@@ -196,13 +206,17 @@ fn start_scrcpy(serial: String, manager: State<'_, ScrcpyProcessManager>) -> Res
     children.remove(&serial);
 
     let title = format!("GamePilot - {serial}");
-    let child = Command::new(scrcpy)
+    let mut child = Command::new(scrcpy)
         .args(["--serial", &serial, "--window-title", &title])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|error| format!("启动 scrcpy 失败：{error}"))?;
+    std::thread::sleep(Duration::from_millis(700));
+    if let Some(status) = child.try_wait().map_err(|error| format!("检查 scrcpy 启动状态失败：{error}"))? {
+        return Err(format!("scrcpy 启动后立即退出（{status}）。请检查官方版本、系统图形环境和 ADB 连接。"));
+    }
     children.insert(serial.clone(), child);
     Ok(format!("已为设备 {serial} 启动 scrcpy 投屏窗口。"))
 }
