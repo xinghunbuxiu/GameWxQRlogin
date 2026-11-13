@@ -40,3 +40,10 @@ Disconnect controls, device install/launch actions, Android companion pairing, t
 ## CI
 
 GitHub Actions validates the React/TypeScript production build and runs `cargo check` for the Tauri Rust backend on Ubuntu.
+
+
+### APK 安装
+
+在设备管理页，选择已授权设备旁的「安装 APK」，通过系统文件选择器选择本地 `.apk` 文件。安装命令只使用固定的 `adb -s <serial> install -r <path>` 参数，不经过 Shell；文件扩展名和文件存在性由 Rust 后端再次校验。安装操作最长等待 180 秒，页面会显示 ADB 返回的安装结果。
+
+桌面端使用 Tauri Dialog 插件打开原生文件选择器。当前版本仅提供安装，不会自动卸载应用，也不会自动启动刚安装的 APK；启动按钮仍只针对已配置的《我的养老时光》包名。
