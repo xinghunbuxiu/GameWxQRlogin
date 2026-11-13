@@ -74,6 +74,21 @@ function App() {
     }
   };
 
+
+  const disconnectWirelessDevice = async (serial: string) => {
+    setActionBusy("disconnect");
+    setActionMessage(null);
+    try {
+      const result = await invoke<string>("adb_disconnect", { address: serial });
+      setActionMessage(result);
+      await refreshDevices();
+    } catch (error) {
+      setActionMessage("断开失败：" + String(error));
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
   const onlineCount = snapshot?.devices.filter(device => device.state === "device").length ?? 0;
   const connectionLabel = !snapshot ? "检测中" : !snapshot.available ? "不可用" : onlineCount ? "已连接" : "待连接";
 
@@ -102,7 +117,7 @@ function App() {
           </div>
           <div className="section-grid">
             <div className="panel"><div className="panel-title"><div><h2>设备列表</h2><p>ADB 实时发现结果</p></div><button className="text-button" onClick={() => setSection("devices")}>查看全部 →</button></div>
-              {snapshot?.devices.length ? <DeviceList devices={snapshot.devices.slice(0, 4)}/> : <div className="empty-state"><div className="empty-icon"><Cable size={24}/></div><b>{snapshot?.available ? "还没有连接设备" : "尚未找到 ADB"}</b><span>{snapshot?.available ? "通过 USB 调试或无线调试连接手机，也可以接入 Android 模拟器。" : "安装 Android SDK Platform-Tools，并将 adb 加入 PATH 后刷新。"}</span><button className="secondary" onClick={() => setSection("devices")}>设备连接说明</button></div>}
+              {snapshot?.devices.length ? <DeviceList devices={snapshot.devices.slice(0, 4)} onDisconnect={disconnectWirelessDevice} busy={actionBusy === "disconnect"}/> : <div className="empty-state"><div className="empty-icon"><Cable size={24}/></div><b>{snapshot?.available ? "还没有连接设备" : "尚未找到 ADB"}</b><span>{snapshot?.available ? "通过 USB 调试或无线调试连接手机，也可以接入 Android 模拟器。" : "安装 Android SDK Platform-Tools，并将 adb 加入 PATH 后刷新。"}</span><button className="secondary" onClick={() => setSection("devices")}>设备连接说明</button></div>}
             </div>
             <div className="panel"><div className="panel-title"><div><h2>快速开始</h2><p>完成自动化运行前的准备</p></div></div><div className="steps"><Step n="01" title="连接 Android 设备" desc="ADB / 无线调试" done={onlineCount > 0}/><Step n="02" title="授权自动化能力" desc="无障碍服务 / 可选 Shizuku" done={false}/><Step n="03" title="配置游戏适配器" desc="我的养老时光" done={false}/><Step n="04" title="创建并运行任务" desc="识别、操作、验证、记录" done={false}/></div></div>
           </div>
@@ -130,7 +145,7 @@ function App() {
             </form>
           </div>
           {actionMessage && <div className="action-message"><AlertCircle size={14}/><span>{actionMessage}</span></div>}
-          {snapshot?.devices.length ? <DeviceList devices={snapshot.devices}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或按上方步骤完成无线配对和连接。"}</span></div>}
+          {snapshot?.devices.length ? <DeviceList devices={snapshot.devices} onDisconnect={disconnectWirelessDevice} busy={actionBusy === "disconnect"}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或按上方步骤完成无线配对和连接。"}</span></div>}
           <div className="callout"><b>连接提示</b><span>USB：手机开启开发者选项和 USB 调试，连接电脑并在手机上确认 RSA 授权。</span><span>无线：配对端口与连接端口不同；先配对，再使用手机页面显示的连接端口执行连接。</span><span>安全：配对码仅用于本次配对，不持久化；所有操作均通过固定 ADB 子命令执行，不提供任意 Shell。</span></div>
         </div> : <div className="panel section-placeholder"><div className="empty-icon">{(() => { const Icon = current.icon; return <Icon size={25}/>; })()}</div><h2>{current.label}模块</h2><p>页面骨架已建立，等待对应设备服务和数据接口接入。</p></div>}
       </section>
@@ -138,8 +153,11 @@ function App() {
   </div>;
 }
 
-function DeviceList({ devices }: { devices: AdbDevice[] }) {
-  return <div className="device-list">{devices.map(device => <div className="device-row" key={device.serial}><div className="device-icon"><Smartphone size={18}/></div><div className="device-main"><b>{device.model ?? device.device ?? device.serial}</b><small>{device.serial}{device.product ? ` · ${device.product}` : ""}</small></div><span className={device.state === "device" ? "device-state connected" : "device-state"}>{device.state === "device" ? <><CheckCircle2 size={13}/> 已授权</> : device.state === "unauthorized" ? "待授权" : device.state === "offline" ? "离线" : device.state}</span></div>)}</div>;
+function DeviceList({ devices, onDisconnect, busy = false }: { devices: AdbDevice[]; onDisconnect?: (serial: string) => void; busy?: boolean }) {
+  return <div className="device-list">{devices.map(device => {
+    const wireless = device.serial.includes(":");
+    return <div className="device-row" key={device.serial}><div className="device-icon"><Smartphone size={18}/></div><div className="device-main"><b>{device.model ?? device.device ?? device.serial}</b><small>{device.serial}{device.product ? " · " + device.product : ""}</small></div><span className={device.state === "device" ? "device-state connected" : "device-state"}>{device.state === "device" ? <><CheckCircle2 size={13}/> 已授权</> : device.state === "unauthorized" ? "待授权" : device.state === "offline" ? "离线" : device.state}</span>{wireless && onDisconnect && <button className="disconnect-button" type="button" disabled={busy} onClick={() => onDisconnect(device.serial)}>断开</button>}</div>;
+  })}</div>;
 }
 function Stat({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) {
   return <div className="stat-card"><div className="stat-top"><span>{label}</span><i>{icon}</i></div><strong>{value}</strong><small>{detail}</small></div>;
