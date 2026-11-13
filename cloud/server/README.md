@@ -19,7 +19,15 @@ Configure:
 - `DEVICE_TOKEN_PEPPER` (at least 32 characters; keep stable and secret)
 - `PORT` (default 8787)
 
-Run `npm install`, `npm run typecheck`, then `npm start`. The service applies `schema.sql` at startup.
+Local container startup:
+
+```bash
+cp .env.example .env
+# Edit .env and set the real OIDC issuer, JWKS URL, audience, and a random DEVICE_TOKEN_PEPPER.
+docker compose up --build
+```
+
+The API listens on port 8787. The service applies `schema.sql` at startup. For local development without Docker, run `npm install`, `npm run typecheck`, `npm run build`, then `npm start` with PostgreSQL and the required environment variables available.
 
 ## Authentication
 
