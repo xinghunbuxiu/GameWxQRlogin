@@ -23,8 +23,6 @@ struct AdbDevice {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct AdbDeviceDetails {
     serial: String,
     model: Option<String>,
@@ -276,7 +274,6 @@ fn adb_disconnect(address: String) -> Result<String, String> {
 mod tests {
     use super::validate_adb_endpoint;
 
-    #[test]
     #[test]
     fn validates_device_serials_without_shell_metacharacters() {
         assert!(super::validate_device_serial("192.168.1.20:5555").is_ok());
