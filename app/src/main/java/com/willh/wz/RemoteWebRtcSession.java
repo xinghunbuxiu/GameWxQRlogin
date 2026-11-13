@@ -91,8 +91,7 @@ public final class RemoteWebRtcSession {
                     if (state == PeerConnection.IceConnectionState.CONNECTED
                             || state == PeerConnection.IceConnectionState.COMPLETED) {
                         listener.onConnected();
-                    } else if (state == PeerConnection.IceConnectionState.FAILED
-                            || state == PeerConnection.IceConnectionState.DISCONNECTED) {
+                    } else if (state == PeerConnection.IceConnectionState.FAILED) {
                         listener.onFailure("WebRTC ICE 连接中断：" + state.name());
                     }
                 }
