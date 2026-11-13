@@ -10,6 +10,8 @@ use std::{
 };
 use wait_timeout::ChildExt;
 
+const TARGET_GAME_PACKAGE: &str = "com.myretirementtime.wdylsg";
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AdbDevice {
@@ -29,6 +31,8 @@ struct AdbDeviceDetails {
     android_version: Option<String>,
     screen_resolution: Option<String>,
     foreground_activity: Option<String>,
+    game_installed: bool,
+    game_apk_path: Option<String>,
 }
 
 struct AdbSnapshot {
@@ -251,6 +255,28 @@ fn launch_target_game(serial: String) -> Result<String, String> {
     Ok(if message.is_empty() { "已发送启动《我的养老时光》指令。".to_string() } else { message.to_string() })
 }
 
+
+#[tauri::command]
+fn uninstall_target_game(serial: String) -> Result<String, String> {
+    validate_device_serial(&serial)?;
+    let adb = adb_executable()?;
+    let output = run_adb_with_timeout(
+        &adb,
+        &["-s", &serial, "shell", "pm", "uninstall", TARGET_GAME_PACKAGE],
+        Duration::from_secs(60),
+    )?;
+    let message = output.trim();
+    if message.lines().any(|line| line.trim() == "Success") {
+        Ok("《我的养老时光》已卸载。".to_string())
+    } else {
+        Err(if message.is_empty() {
+            "卸载命令未返回成功状态，请检查设备。".to_string()
+        } else {
+            message.to_string()
+        })
+    }
+}
+
 #[tauri::command]
 fn get_adb_device_details(serial: String) -> Result<AdbDeviceDetails, String> {
     validate_device_serial(&serial)?;
@@ -263,7 +289,11 @@ fn get_adb_device_details(serial: String) -> Result<AdbDeviceDetails, String> {
     let foreground_activity = activity_output.and_then(|value| value.lines()
         .find(|line| line.contains("mResumedActivity") || line.contains("topResumedActivity"))
         .map(|line| line.trim().to_string()));
-    Ok(AdbDeviceDetails { serial, model, android_version, screen_resolution, foreground_activity })
+    let package_output = run_adb(&adb, &["-s", &serial, "shell", "pm", "path", TARGET_GAME_PACKAGE])?;
+    let game_apk_path = package_output.lines()
+        .find_map(|line| line.trim().strip_prefix("package:").map(str::to_string));
+    let game_installed = game_apk_path.is_some();
+    Ok(AdbDeviceDetails { serial, model, android_version, screen_resolution, foreground_activity, game_installed, game_apk_path })
 }
 
 fn adb_executable() -> Result<PathBuf, String> {
@@ -307,7 +337,7 @@ fn adb_disconnect(address: String) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_adb_endpoint;
+    use super::{validate_adb_endpoint, TARGET_GAME_PACKAGE};
 
     #[test]
     fn validates_device_serials_without_shell_metacharacters() {
@@ -316,6 +346,11 @@ mod tests {
         assert!(super::validate_device_serial("-s").is_err());
         assert!(super::validate_device_serial("device;whoami").is_err());
         assert!(super::validate_device_serial("device name").is_err());
+    }
+
+    #[test]
+    fn target_game_package_is_fixed() {
+        assert_eq!(TARGET_GAME_PACKAGE, "com.myretirementtime.wdylsg");
     }
 
     #[test]
@@ -360,7 +395,7 @@ mod tests {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details, launch_target_game, install_target_game])
+        .invoke_handler(tauri::generate_handler![get_adb_snapshot, adb_pair, adb_connect, adb_disconnect, get_adb_device_details, launch_target_game, install_target_game, uninstall_target_game])
         .run(tauri::generate_context!())
         .expect("error while running GamePilot");
 }
