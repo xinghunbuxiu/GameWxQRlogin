@@ -298,7 +298,7 @@ export default function RemoteSessionPanel() {
         <video ref={videoRef} autoPlay playsInline muted />
         {!streamReady && <div className="remote-video-empty"><VideoOff size={30}/><b>暂无远程画面</b><span>主人批准后将开始 WebRTC 媒体协商。</span></div>}
       </div>
-      <div className="remote-video-footer"><span>信令：WSS</span><span>媒体：WebRTC / DTLS-SRTP</span><span>网络：STUN 优先，TURN 待接入</span></div>
+      <div className="remote-video-footer"><span>信令：WSS</span><span>媒体：WebRTC / DTLS-SRTP</span><span>网络：STUN + 临时 TURN 凭证</span></div>
     </div>
   </div>;
 }
