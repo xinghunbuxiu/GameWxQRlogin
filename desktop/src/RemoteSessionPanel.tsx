@@ -209,7 +209,7 @@ export default function RemoteSessionPanel() {
             const message = JSON.parse(String(event.data)) as Record<string, unknown>;
             if (message.type === "session.approved") {
               const id = String(message.sessionId ?? sessionRef.current ?? "");
-              if (id) await startViewerPeer(id, socket!);
+              if (id) { sessionRef.current = id; setSessionId(id); await startViewerPeer(id, socket!); }
             } else if (message.type === "session.rejected") {
               setStatus("设备主人拒绝了本次连接。");
               await stopSession(false);
