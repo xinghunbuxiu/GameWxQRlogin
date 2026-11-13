@@ -1,0 +1,27 @@
+name: GamePilot Remote Server
+on:
+  push:
+    branches: [feature/gamepilot-cloud-remote-mvp]
+    paths:
+      - "cloud/server/**"
+      - ".github/workflows/gamepilot-remote-server.yml"
+  pull_request:
+    paths:
+      - "cloud/server/**"
+      - ".github/workflows/gamepilot-remote-server.yml"
+  workflow_dispatch:
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloud/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloud/server/package-lock.json
+      - run: npm install
+      - run: npm run typecheck
