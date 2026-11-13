@@ -54,6 +54,10 @@ public final class RemoteApiClient {
         return result.getString("ticket");
     }
 
+    public static void endSession(String serverUrl, String deviceToken, String sessionId) throws Exception {
+        post(serverUrl, "/v1/sessions/" + sessionId + "/end", deviceToken, new JSONObject());
+    }
+
     public static void decideSession(String serverUrl, String deviceToken, String sessionId, boolean approve) throws Exception {
         JSONObject body = new JSONObject();
         body.put("decision", approve ? "approve" : "reject");
