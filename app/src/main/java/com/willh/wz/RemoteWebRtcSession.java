@@ -40,6 +40,7 @@ public final class RemoteWebRtcSession {
     private final int width;
     private final int height;
     private final int fps;
+    private final List<PeerConnection.IceServer> iceServers;
     private final List<IceCandidate> pendingRemoteCandidates = new ArrayList<>();
 
     private EglBase eglBase;
@@ -54,7 +55,7 @@ public final class RemoteWebRtcSession {
 
     public RemoteWebRtcSession(Context context, String sessionId, Intent projectionPermissionData,
                                RemoteSignalingClient signaling, Listener listener,
-                               int width, int height, int fps) {
+                               List<PeerConnection.IceServer> iceServers, int width, int height, int fps) {
         this.context = context.getApplicationContext();
         this.sessionId = sessionId;
         this.projectionPermissionData = projectionPermissionData;
@@ -63,6 +64,7 @@ public final class RemoteWebRtcSession {
         this.width = width;
         this.height = height;
         this.fps = fps;
+        this.iceServers = iceServers;
     }
 
     public synchronized void start() {
@@ -75,8 +77,7 @@ public final class RemoteWebRtcSession {
                     .setVideoDecoderFactory(new DefaultVideoDecoderFactory(eglBase.getEglBaseContext()))
                     .createPeerConnectionFactory();
 
-            PeerConnection.IceServer stun = PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer();
-            PeerConnection.RTCConfiguration configuration = new PeerConnection.RTCConfiguration(Collections.singletonList(stun));
+            PeerConnection.RTCConfiguration configuration = new PeerConnection.RTCConfiguration(iceServers == null || iceServers.isEmpty() ? Collections.singletonList(PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()) : iceServers);
             configuration.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN;
 
             peerConnection = factory.createPeerConnection(configuration, new PeerConnection.Observer() {
