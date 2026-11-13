@@ -17,6 +17,9 @@ Configure:
 - `AUTH_ISSUER`
 - `AUTH_AUDIENCE`
 - `DEVICE_TOKEN_PEPPER` (at least 32 characters; keep stable and secret)
+- `TURN_URIS` (comma-separated `turn:` / `turns:` URLs)
+- `TURN_SHARED_SECRET` (separate 32+ character coturn REST shared secret)
+- `TURN_CREDENTIAL_TTL_SECONDS` (300–86400, default 3600)
 - `PORT` (default 8787)
 
 Local container startup:
