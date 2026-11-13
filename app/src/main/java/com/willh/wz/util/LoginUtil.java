@@ -8,6 +8,26 @@ import java.security.MessageDigest;
 
 public class LoginUtil {
 
+    /**
+     * Forwards only values actually present in the OAuth redirect.
+     * It intentionally omits synthetic auth_result, errcode and WeChat checksum fields.
+     */
+    public static Bundle generateOAuthBundle(String req) {
+        Bundle bundle = new Bundle();
+        android.net.Uri uri = android.net.Uri.parse(req);
+        String code = uri.getQueryParameter("code");
+        String state = uri.getQueryParameter("state");
+        bundle.putInt("_wxapi_command_type", 1);
+        if (code != null) {
+            bundle.putString("_wxapi_sendauth_resp_token", code);
+        }
+        if (state != null) {
+            bundle.putString("_wxapi_sendauth_resp_state", state);
+        }
+        bundle.putString("_wxapi_sendauth_resp_url", req);
+        return bundle;
+    }
+
     public static Bundle generateBundle(String req) {
         Bundle bundle = new Bundle();
         int indexOf = req.indexOf("&state=");
