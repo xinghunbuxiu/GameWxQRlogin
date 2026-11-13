@@ -26,11 +26,12 @@ Local container startup:
 
 ```bash
 cp .env.example .env
-# Edit .env and set the real OIDC issuer, JWKS URL, audience, and a random DEVICE_TOKEN_PEPPER.
+# Set a unique random POSTGRES_PASSWORD, the real OIDC issuer/JWKS/audience,
+# and a separate random DEVICE_TOKEN_PEPPER before starting.
 docker compose up --build
 ```
 
-The API listens on port 8787. The service applies `schema.sql` at startup. For local development without Docker, run `npm install`, `npm run typecheck`, `npm run build`, then `npm start` with PostgreSQL and the required environment variables available.
+The API listens on port 8787 but Compose publishes it only on host loopback (`127.0.0.1:8787`) for a host reverse proxy; PostgreSQL is not published to the host. Configure HTTPS/WSS termination and proxy WebSocket upgrades before exposing the service. The container runs as the unprivileged `node` user and includes a health check. The service applies `schema.sql` at startup. For local development without Docker, run `npm install`, `npm run typecheck`, `npm run build`, then `npm start` with PostgreSQL and the required environment variables available.
 
 ## Authentication
 
