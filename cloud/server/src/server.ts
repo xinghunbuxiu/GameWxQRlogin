@@ -97,13 +97,33 @@ app.post("/v1/devices/heartbeat", async (request) => {
   return { ok: true };
 });
 
+app.post("/v1/devices/:deviceId/invites", async (request, reply) => {
+  const user = await requirePrincipal(request, "user");
+  const params = z.object({ deviceId: z.string().uuid() }).parse(request.params);
+  const body = z.object({ expiresInDays: z.number().int().min(1).max(30).default(7) }).parse(request.body ?? {});
+  const deviceResult = await db.query("SELECT id,owner_id FROM devices WHERE id=$1", [params.deviceId]);
+  const device = deviceResult.rows[0];
+  if (!device || device.owner_id !== user.id) throw Object.assign(new Error("Not found"), { statusCode: 404 });
+  const id = randomUUID();
+  const token = "gp_inv_" + randomBytes(32).toString("base64url");
+  await db.query(
+    "INSERT INTO device_invites(id,device_id,created_by,token_hash,expires_at) VALUES($1,$2,$3,$4,now()+($5 * interval '1 day'))",
+    [id, params.deviceId, user.id, hashSecret(token), body.expiresInDays]
+  );
+  return reply.code(201).send({ inviteToken: token, expiresInDays: body.expiresInDays });
+});
+
 app.post("/v1/sessions", async (request, reply) => {
   const user = await requirePrincipal(request, "user");
-  const body = z.object({ deviceId: z.string().uuid(), reason: z.string().trim().min(1).max(240) }).parse(request.body);
-  const deviceResult = await db.query("SELECT id, owner_id, status FROM devices WHERE id=$1", [body.deviceId]);
-  const device = deviceResult.rows[0];
+  const body = z.object({ inviteToken: z.string().min(20).max(160), reason: z.string().trim().min(1).max(240) }).parse(request.body);
+  const inviteResult = await db.query(
+    "SELECT d.id,d.owner_id,d.status FROM device_invites i JOIN devices d ON d.id=i.device_id WHERE i.token_hash=$1 AND i.revoked_at IS NULL AND i.expires_at>now()",
+    [hashSecret(body.inviteToken)]
+  );
+  const device = inviteResult.rows[0];
   if (!device || device.status !== "online") return reply.code(409).send({ error: "DEVICE_UNAVAILABLE" });
   if (device.owner_id === user.id) return reply.code(400).send({ error: "CANNOT_REMOTE_CONNECT_OWN_DEVICE" });
+  if (![...sockets].some(p => p.principal.kind === "device" && p.principal.id === device.id)) return reply.code(409).send({ error: "DEVICE_NOT_CONNECTED_TO_SIGNALING" });
   const id = randomUUID();
   await db.query(
     "INSERT INTO remote_sessions(id,device_id,requester_id,status,reason,expires_at) VALUES($1,$2,$3,'pending',$4,now()+interval '90 seconds')",
