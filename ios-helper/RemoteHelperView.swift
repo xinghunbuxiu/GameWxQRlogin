@@ -47,7 +47,7 @@ struct RemoteHelperView: View {
         .alert(item: $pendingSession) { request in
             Alert(
                 title: Text("远程连接申请"),
-                message: Text("申请原因：\(request.reason)\n\n是否允许本次连接？"),
+                message: Text("申请账号：\(request.requesterID)\n申请原因：\(request.reason)\n\n是否允许本次连接？"),
                 primaryButton: .default(Text("允许本次连接")) { Task { await decide(request, approve: true) } },
                 secondaryButton: .cancel(Text("拒绝")) { Task { await decide(request, approve: false) } }
             )
