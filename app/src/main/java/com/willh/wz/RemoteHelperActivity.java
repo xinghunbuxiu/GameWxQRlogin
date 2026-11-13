@@ -295,7 +295,7 @@ public class RemoteHelperActivity extends Activity {
         registerButton.setEnabled(!busy);
         heartbeatButton.setEnabled(!busy && deviceRegistered);
         clearButton.setEnabled(!busy && deviceRegistered);
-        listenButton.setEnabled(!busy && deviceRegistered && !listening);
+        listenButton.setEnabled(!busy && deviceRegistered);
     }
 
     private void setStatus(String text) {
