@@ -127,10 +127,10 @@ app.post("/v1/sessions", async (request, reply) => {
   const id = randomUUID();
   await db.query(
     "INSERT INTO remote_sessions(id,device_id,requester_id,status,reason,expires_at) VALUES($1,$2,$3,'pending',$4,now()+interval '90 seconds')",
-    [id, body.deviceId, user.id, body.reason]
+    [id, device.id, user.id, body.reason]
   );
   await record(id, user.id, "session.requested", { reason: body.reason });
-  emit(p => p.kind === "device" && p.id === body.deviceId, { type: "session.requested", sessionId: id, reason: body.reason, expiresInSeconds: 90 });
+  emit(p => p.kind === "device" && p.id === device.id, { type: "session.requested", sessionId: id, reason: body.reason, expiresInSeconds: 90 });
   return reply.code(201).send({ sessionId: id, status: "pending", expiresInSeconds: 90 });
 });
 
@@ -168,7 +168,8 @@ app.post("/v1/sessions/:sessionId/end", async (request) => {
   }
   await db.query("UPDATE remote_sessions SET status='ended',ended_at=now() WHERE id=$1 AND status IN ('approved','active','pending')", [params.sessionId]);
   await record(params.sessionId, principal.id, "session.ended");
-  emit(p => p.kind === "device" ? p.id === session.device_id : p.id === session.requester_id, { type: "session.ended", sessionId: params.sessionId });
+  emit(p => p.kind === "device" && p.id === session.device_id, { type: "session.ended", sessionId: params.sessionId });
+  emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.ended", sessionId: params.sessionId });
   return { status: "ended" };
 });
 
@@ -178,7 +179,15 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
   catch { socket.close(1008, "unauthorized"); return; }
   const entry: Socket = { principal, send: value => socket.send(JSON.stringify(value)), close: () => socket.close() };
   sockets.add(entry);
-  socket.on("close", () => sockets.delete(entry));
+  if (principal.kind === "device") {
+    await db.query("UPDATE devices SET status='online',last_seen_at=now(),updated_at=now() WHERE id=$1", [principal.id]);
+  }
+  socket.on("close", () => {
+    sockets.delete(entry);
+    if (principal.kind === "device" && ![...sockets].some(item => item.principal.kind === "device" && item.principal.id === principal.id)) {
+      void db.query("UPDATE devices SET status='offline',updated_at=now() WHERE id=$1", [principal.id]);
+    }
+  });
   socket.on("message", async (raw: RawData) => {
     try {
       const data = Buffer.isBuffer(raw) ? raw : Array.isArray(raw) ? Buffer.concat(raw) : Buffer.from(raw);
@@ -209,7 +218,8 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
       } else {
         await db.query("UPDATE remote_sessions SET status='ended',ended_at=now() WHERE id=$1", [message.sessionId]);
         await record(message.sessionId, principal.id, "session.ended");
-        emit(p => p.kind === "device" ? p.id === session.device_id : p.id === session.requester_id, { type: "session.ended", sessionId: message.sessionId });
+        emit(p => p.kind === "device" && p.id === session.device_id, { type: "session.ended", sessionId: message.sessionId });
+        emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.ended", sessionId: message.sessionId });
       }
     } catch (error) {
       entry.send({ type: "error", code: "INVALID_OR_UNAUTHORIZED_MESSAGE", message: error instanceof Error ? error.message : "Invalid message" });
