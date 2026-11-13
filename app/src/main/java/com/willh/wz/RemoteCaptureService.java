@@ -16,7 +16,9 @@ import android.util.DisplayMetrics;
 import android.util.Log;
 
 import org.json.JSONObject;
+import org.webrtc.PeerConnection;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -105,40 +107,47 @@ public class RemoteCaptureService extends Service {
                 signalingClient = client;
                 client.connect(record.serverUrl, record.deviceToken, new RemoteSignalingClient.Listener() {
                     @Override public void onConnected() {
-                        mainHandler.post(() -> {
-                            if (stopping.get()) return;
-                            DisplayMetrics metrics = getResources().getDisplayMetrics();
-                            int width = Math.max(metrics.widthPixels, 1);
-                            int height = Math.max(metrics.heightPixels, 1);
-                            webRtcSession = new RemoteWebRtcSession(
-                                    RemoteCaptureService.this,
-                                    sessionId,
-                                    projectionPermissionData,
-                                    client,
-                                    new RemoteWebRtcSession.Listener() {
-                                        @Override public void onReady() {
-                                            if (!client.sendSessionReady(sessionId)) {
-                                                stopCapture(true);
-                                            }
-                                        }
-                                        @Override public void onConnected() {
-                                            if (!sessionStarted) {
-                                                sessionStarted = true;
-                                                client.sendSessionStarted(sessionId);
-                                                Log.i(TAG, "WebRTC screen session connected");
-                                            }
-                                        }
-                                        @Override public void onFailure(String message) {
-                                            Log.w(TAG, message);
-                                            stopCapture(true);
-                                        }
-                                    },
-                                    width,
-                                    height,
-                                    15
-                            );
-                            new Thread(() -> webRtcSession.start(), "GamePilotWebRtcStart").start();
-                        });
+                        new Thread(() -> {
+                            try {
+                                List<PeerConnection.IceServer> iceServers = RemoteApiClient.getIceServers(record.serverUrl, record.deviceToken);
+                                mainHandler.post(() -> {
+                                    if (stopping.get()) return;
+                                    DisplayMetrics metrics = getResources().getDisplayMetrics();
+                                    int width = Math.max(metrics.widthPixels, 1);
+                                    int height = Math.max(metrics.heightPixels, 1);
+                                    webRtcSession = new RemoteWebRtcSession(
+                                            RemoteCaptureService.this,
+                                            sessionId,
+                                            projectionPermissionData,
+                                            client,
+                                            new RemoteWebRtcSession.Listener() {
+                                                @Override public void onReady() {
+                                                    if (!client.sendSessionReady(sessionId)) stopCapture(true);
+                                                }
+                                                @Override public void onConnected() {
+                                                    if (!sessionStarted) {
+                                                        sessionStarted = true;
+                                                        client.sendSessionStarted(sessionId);
+                                                        Log.i(TAG, "WebRTC screen session connected");
+                                                    }
+                                                }
+                                                @Override public void onFailure(String message) {
+                                                    Log.w(TAG, message);
+                                                    stopCapture(true);
+                                                }
+                                            },
+                                            iceServers,
+                                            width,
+                                            height,
+                                            15
+                                    );
+                                    new Thread(() -> webRtcSession.start(), "GamePilotWebRtcStart").start();
+                                });
+                            } catch (Exception error) {
+                                Log.e(TAG, "Unable to obtain ICE server configuration", error);
+                                stopCapture(true);
+                            }
+                        }, "GamePilotIceConfig").start();
                     }
 
                     @Override public void onSessionRequested(String requestedSessionId, String requesterId, String reason) {
