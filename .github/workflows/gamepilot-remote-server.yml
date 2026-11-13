@@ -38,4 +38,5 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - run: npm run typecheck\n      - run: node tests/run-db-invariants.mjs
+      - run: npm run typecheck
+      - run: node tests/run-db-invariants.mjs
