@@ -49,6 +49,17 @@ public final class RemoteApiClient {
         return new Registration(result.getString("deviceId"), result.getString("deviceToken"));
     }
 
+    public static String createRealtimeTicket(String serverUrl, String deviceToken) throws Exception {
+        JSONObject result = post(serverUrl, "/v1/realtime/ticket", deviceToken, new JSONObject());
+        return result.getString("ticket");
+    }
+
+    public static void decideSession(String serverUrl, String deviceToken, String sessionId, boolean approve) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("decision", approve ? "approve" : "reject");
+        post(serverUrl, "/v1/sessions/" + sessionId + "/decision", deviceToken, body);
+    }
+
     public static void heartbeat(String serverUrl, String deviceToken) throws Exception {
         JSONObject body = new JSONObject();
         body.put("status", "online");
