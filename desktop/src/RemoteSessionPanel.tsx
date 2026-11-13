@@ -191,28 +191,25 @@ export default function RemoteSessionPanel() {
       return;
     }
     setBusy(true);
+    let socket: WebSocket | null = null;
     try {
-      const result = await api<SessionResponse>("/v1/sessions", "POST", {
-        inviteToken: inviteToken.trim(),
-        reason: reason.trim() || "远程查看设备屏幕"
-      });
-      sessionRef.current = result.sessionId;
-      setSessionId(result.sessionId);
-      setStatus("连接申请已发送，等待设备主人确认。申请将在 90 秒后过期。");
-
+      // Open the requester signaling socket before creating the session so a fast
+      // owner approval cannot be lost between session creation and WS connection.
       const ticket = await api<TicketResponse>("/v1/realtime/ticket", "POST", {});
       const wsUrl = new URL(baseUrl());
       wsUrl.protocol = "wss:";
-      wsUrl.pathname = wsUrl.pathname.replace(/\/+$/, "") + "/v1/realtime";
+      wsUrl.pathname = wsUrl.pathname.replace(/\\/+$/, "") + "/v1/realtime";
       wsUrl.search = new URLSearchParams({ ticket: ticket.ticket }).toString();
-      const socket = new WebSocket(wsUrl.toString());
+      socket = new WebSocket(wsUrl.toString());
       socketRef.current = socket;
+
       socket.onmessage = event => {
         void (async () => {
           try {
             const message = JSON.parse(String(event.data)) as Record<string, unknown>;
             if (message.type === "session.approved") {
-              await startViewerPeer(result.sessionId, socket);
+              const id = String(message.sessionId ?? sessionRef.current ?? "");
+              if (id) await startViewerPeer(id, socket!);
             } else if (message.type === "session.rejected") {
               setStatus("设备主人拒绝了本次连接。");
               await stopSession(false);
@@ -232,7 +229,22 @@ export default function RemoteSessionPanel() {
       socket.onclose = () => {
         if (sessionRef.current) setStatus("信令连接已关闭。");
       };
+      await new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(() => reject(new Error("WebSocket 连接超时")), 12000);
+        socket!.addEventListener("open", () => { window.clearTimeout(timeout); resolve(); }, { once: true });
+        socket!.addEventListener("error", () => { window.clearTimeout(timeout); reject(new Error("WebSocket 连接失败")); }, { once: true });
+      });
+
+      const result = await api<SessionResponse>("/v1/sessions", "POST", {
+        inviteToken: inviteToken.trim(),
+        reason: reason.trim() || "远程查看设备屏幕"
+      });
+      sessionRef.current = result.sessionId;
+      setSessionId(result.sessionId);
+      setStatus("连接申请已发送，等待设备主人确认。申请将在 90 秒后过期。");
     } catch (error) {
+      socket?.close(1000, "session request failed");
+      if (socketRef.current === socket) socketRef.current = null;
       setStatus("申请远程连接失败：" + String(error));
       sessionRef.current = null;
       setSessionId(null);
