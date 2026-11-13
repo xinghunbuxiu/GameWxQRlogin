@@ -4,9 +4,7 @@ services:
     environment:
       POSTGRES_DB: gamepilot
       POSTGRES_USER: gamepilot
-      POSTGRES_PASSWORD: change-me-local-only
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - gamepilot_pg:/var/lib/postgresql/data
     healthcheck:
@@ -19,12 +17,18 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://gamepilot:change-me-local-only@postgres:5432/gamepilot
+      DATABASE_URL: postgresql://gamepilot:${POSTGRES_PASSWORD}@postgres:5432/gamepilot
       PGSSLMODE: disable
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 volumes:
   gamepilot_pg:
