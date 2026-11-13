@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
+import type { RawData } from "ws";
 
 const env = z.object({
   PORT: z.coerce.number().int().positive().default(8787),
@@ -158,14 +159,15 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
   const entry: Socket = { principal, send: value => socket.send(JSON.stringify(value)), close: () => socket.close() };
   sockets.add(entry);
   socket.on("close", () => sockets.delete(entry));
-  socket.on("message", async raw => {
+  socket.on("message", async (raw: RawData) => {
     try {
-      if (raw.length > 48 * 1024) { socket.close(1009, "message too large"); return; }
+      const data = Buffer.isBuffer(raw) ? raw : Array.isArray(raw) ? Buffer.concat(raw) : Buffer.from(raw);
+      if (data.length > 48 * 1024) { socket.close(1009, "message too large"); return; }
       const message = z.object({
         type: z.enum(["signal", "session.started", "session.ended"]),
         sessionId: z.string().uuid(),
         payload: z.unknown().optional()
-      }).parse(JSON.parse(raw.toString()));
+      }).parse(JSON.parse(data.toString("utf8")));
       const result = await db.query(
         "SELECT s.id,s.device_id,s.requester_id,s.status,d.owner_id FROM remote_sessions s JOIN devices d ON d.id=s.device_id WHERE s.id=$1",
         [message.sessionId]
