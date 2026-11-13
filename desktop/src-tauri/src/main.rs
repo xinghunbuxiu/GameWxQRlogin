@@ -155,17 +155,18 @@ fn validate_adb_endpoint(value: &str) -> Result<(), String> {
     if value.is_empty() || value.len() > 255 || value.chars().any(char::is_whitespace) || value.contains("://") {
         return Err("地址格式无效，请填写主机名或 IP:端口。".to_string());
     }
-    let (host, port) = if let Some(rest) = value.strip_prefix('[') {
+    let (host, port, is_ipv6) = if let Some(rest) = value.strip_prefix('[') {
         let (ipv6, suffix) = rest.split_once(']').ok_or("IPv6 地址缺少右方括号。")?;
         let port = suffix.strip_prefix(':').ok_or("地址必须包含端口。")?;
         if ipv6.parse::<std::net::Ipv6Addr>().is_err() {
             return Err("IPv6 地址格式无效。".to_string());
         }
-        (ipv6, port)
+        (ipv6, port, true)
     } else {
-        value.split_once(':').ok_or("地址必须采用 主机:端口 格式。")?
+        let (host, port) = value.split_once(':').ok_or("地址必须采用 主机:端口 格式。")?;
+        (host, port, false)
     };
-    if host.is_empty() || host.len() > 200 || !host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
+    if host.is_empty() || host.len() > 200 || (!is_ipv6 && !host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')) {
         return Err("主机名格式无效。IPv6 请使用 [地址]:端口 格式。".to_string());
     }
     let port_number = port.parse::<u16>().map_err(|_| "端口必须是 1 到 65535 之间的数字。")?;
