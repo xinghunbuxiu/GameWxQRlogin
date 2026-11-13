@@ -178,10 +178,11 @@ app.post("/v1/sessions", async (request, reply) => {
   );
   if (activeSession.rows.length) return reply.code(409).send({ error: "DEVICE_BUSY" });
   const id = randomUUID();
-  await db.query(
-    "INSERT INTO remote_sessions(id,device_id,requester_id,status,reason,expires_at) VALUES($1,$2,$3,'pending',$4,now()+interval '90 seconds')",
+  const createdSession = await db.query(
+    "INSERT INTO remote_sessions(id,device_id,requester_id,status,reason,expires_at) VALUES($1,$2,$3,'pending',$4,now()+interval '90 seconds') ON CONFLICT (device_id) WHERE status IN ('pending','approved','active') DO NOTHING RETURNING id",
     [id, device.id, user.id, body.reason]
   );
+  if (!createdSession.rowCount) return reply.code(409).send({ error: "DEVICE_BUSY" });
   await record(id, user.id, "session.requested", { reason: body.reason });
   emit(p => p.kind === "device" && p.id === device.id, { type: "session.requested", sessionId: id, requesterId: user.id, reason: body.reason, expiresInSeconds: 90 });
   return reply.code(201).send({ sessionId: id, status: "pending", expiresInSeconds: 90 });
@@ -202,7 +203,14 @@ app.post("/v1/sessions/:sessionId/decision", async (request) => {
     return { status: "expired" };
   }
   const approved = body.decision === "approve";
-  await db.query("UPDATE remote_sessions SET status=$1,approved_at=CASE WHEN $2 THEN now() ELSE NULL END,expires_at=CASE WHEN $2 THEN now()+interval '5 minutes' ELSE expires_at END WHERE id=$3", [approved ? "approved" : "rejected", approved, params.sessionId]);
+  const decisionUpdate = await db.query(
+    "UPDATE remote_sessions SET status=$1,approved_at=CASE WHEN $2 THEN now() ELSE NULL END,expires_at=CASE WHEN $2 THEN now()+interval '5 minutes' ELSE expires_at END WHERE id=$3 AND status='pending' AND expires_at>now() RETURNING id",
+    [approved ? "approved" : "rejected", approved, params.sessionId]
+  );
+  if (!decisionUpdate.rowCount) {
+    const latest = await db.query("SELECT status FROM remote_sessions WHERE id=$1", [params.sessionId]);
+    return { status: latest.rows[0]?.status ?? "expired" };
+  }
   await record(params.sessionId, device.id, approved ? "session.approved" : "session.rejected");
   emit(p => p.kind === "user" && p.id === session.requester_id, { type: approved ? "session.approved" : "session.rejected", sessionId: params.sessionId });
   return { status: approved ? "approved" : "rejected" };
@@ -219,10 +227,15 @@ app.post("/v1/sessions/:sessionId/end", async (request) => {
   if (!session || (principal.kind === "device" ? principal.id !== session.device_id : principal.id !== session.requester_id && principal.id !== session.owner_id)) {
     throw Object.assign(new Error("Not found"), { statusCode: 404 });
   }
-  await db.query("UPDATE remote_sessions SET status='ended',ended_at=now() WHERE id=$1 AND status IN ('approved','active','pending')", [params.sessionId]);
-  await record(params.sessionId, principal.id, "session.ended");
-  emit(p => p.kind === "device" && p.id === session.device_id, { type: "session.ended", sessionId: params.sessionId });
-  emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.ended", sessionId: params.sessionId });
+  const ended = await db.query(
+    "UPDATE remote_sessions SET status='ended',ended_at=now() WHERE id=$1 AND status IN ('approved','active','pending') RETURNING id",
+    [params.sessionId]
+  );
+  if (ended.rowCount) {
+    await record(params.sessionId, principal.id, "session.ended");
+    emit(p => p.kind === "device" && p.id === session.device_id, { type: "session.ended", sessionId: params.sessionId });
+    emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.ended", sessionId: params.sessionId });
+  }
   return { status: "ended" };
 });
 
@@ -300,14 +313,23 @@ app.get("/v1/realtime", { websocket: true }, async (socket, request) => {
           await db.query("UPDATE remote_sessions SET status='expired' WHERE id=$1 AND status='approved'", [message.sessionId]);
           throw new Error("Approval window expired");
         }
-        await db.query("UPDATE remote_sessions SET status='active',started_at=now(),expires_at=now()+interval '4 hours' WHERE id=$1", [message.sessionId]);
+        const started = await db.query(
+          "UPDATE remote_sessions SET status='active',started_at=now(),expires_at=now()+interval '4 hours' WHERE id=$1 AND status='approved' AND expires_at>now() RETURNING id",
+          [message.sessionId]
+        );
+        if (!started.rowCount) throw new Error("Session is no longer approved");
         await record(message.sessionId, principal.id, "session.started");
         emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.started", sessionId: message.sessionId });
       } else {
-        await db.query("UPDATE remote_sessions SET status='ended',ended_at=now() WHERE id=$1", [message.sessionId]);
-        await record(message.sessionId, principal.id, "session.ended");
-        emit(p => p.kind === "device" && p.id === session.device_id, { type: "session.ended", sessionId: message.sessionId });
-        emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.ended", sessionId: message.sessionId });
+        const ended = await db.query(
+          "UPDATE remote_sessions SET status='ended',ended_at=now() WHERE id=$1 AND status IN ('approved','active','pending') RETURNING id",
+          [message.sessionId]
+        );
+        if (ended.rowCount) {
+          await record(message.sessionId, principal.id, "session.ended");
+          emit(p => p.kind === "device" && p.id === session.device_id, { type: "session.ended", sessionId: message.sessionId });
+          emit(p => p.kind === "user" && p.id === session.requester_id, { type: "session.ended", sessionId: message.sessionId });
+        }
       }
     } catch (error) {
       entry.send({ type: "error", code: "INVALID_OR_UNAUTHORIZED_MESSAGE", message: error instanceof Error ? error.message : "Invalid message" });
