@@ -22,6 +22,15 @@ enum RemoteAPIClient {
         delegate: RedirectBlocker(),
         delegateQueue: nil
     )
+    private static let webSocketSession = URLSession(
+        configuration: .ephemeral,
+        delegate: RedirectBlocker(),
+        delegateQueue: nil
+    )
+
+    static func makeWebSocketTask(url: URL) -> URLSessionWebSocketTask {
+        webSocketSession.webSocketTask(with: url)
+    }
     static func register(serverURL: String, ownerJWT: String, displayName: String) async throws -> RemoteRegistration {
         let body: [String: Any] = [
             "displayName": displayName,
