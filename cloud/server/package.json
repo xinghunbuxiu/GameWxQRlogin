@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
   },
   "dependencies": {
     "@fastify/websocket": "^11.0.1",
