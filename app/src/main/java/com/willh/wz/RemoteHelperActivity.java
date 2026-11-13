@@ -181,8 +181,8 @@ public class RemoteHelperActivity extends Activity {
                             setStatus("已连接云端，正在等待远程连接申请。\\n每次申请都必须由本机主人确认。");
                         });
                     }
-                    @Override public void onSessionRequested(String sessionId, String reason) {
-                        runOnUiThread(() -> showApprovalDialog(sessionId, reason));
+                    @Override public void onSessionRequested(String sessionId, String requesterId, String reason) {
+                        runOnUiThread(() -> showApprovalDialog(sessionId, requesterId, reason));
                     }
                     @Override public void onDisconnected(String message) {
                         runOnUiThread(() -> {
@@ -203,10 +203,10 @@ public class RemoteHelperActivity extends Activity {
         });
     }
 
-    private void showApprovalDialog(String sessionId, String reason) {
+    private void showApprovalDialog(String sessionId, String requesterId, String reason) {
         new AlertDialog.Builder(this)
                 .setTitle("远程连接申请")
-                .setMessage("申请原因：" + reason + "\\n\\n是否允许本次连接？")
+                .setMessage("申请账号：" + requesterId + "\\n申请原因：" + reason + "\\n\\n是否允许本次连接？")
                 .setCancelable(false)
                 .setPositiveButton("允许本次连接", (dialog, which) -> decideSession(sessionId, true))
                 .setNegativeButton("拒绝", (dialog, which) -> decideSession(sessionId, false))
