@@ -3,6 +3,8 @@ package com.willh.wz;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.graphics.Typeface;
@@ -31,8 +33,24 @@ public class RemoteHelperActivity extends Activity {
     private Button registerButton;
     private Button heartbeatButton;
     private Button listenButton;
-    private RemoteSignalingClient signalingClient;
     private boolean listening;
+    private boolean presenceReceiverRegistered;
+    private String shownPendingSessionId;
+    private final BroadcastReceiver presenceReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context context, Intent intent) {
+            if (RemotePresenceService.ACTION_STATUS.equals(intent.getAction())) {
+                listening = intent.getBooleanExtra(RemotePresenceService.EXTRA_RUNNING, false);
+                listenButton.setText(listening ? "断开云端连接" : "连接云端，等待远程申请");
+                String message = intent.getStringExtra(RemotePresenceService.EXTRA_STATUS);
+                if (message != null) setStatus(message);
+            } else if (RemotePresenceService.ACTION_SESSION_REQUESTED.equals(intent.getAction())) {
+                showApprovalDialog(
+                        intent.getStringExtra(RemotePresenceService.EXTRA_SESSION_ID),
+                        intent.getStringExtra(RemotePresenceService.EXTRA_REQUESTER_ID),
+                        intent.getStringExtra(RemotePresenceService.EXTRA_REASON));
+            }
+        }
+    };
     private static final int REQUEST_SCREEN_CAPTURE = 7401;
     private String approvedSessionId;
     private Button clearButton;
@@ -43,6 +61,7 @@ public class RemoteHelperActivity extends Activity {
         super.onCreate(state);
         buildView();
         showSavedDevice();
+        handlePendingSessionIntent(getIntent());
     }
 
     private void buildView() {
@@ -158,65 +177,38 @@ public class RemoteHelperActivity extends Activity {
 
     private void toggleSignaling() {
         if (listening) {
-            if (signalingClient != null) signalingClient.close();
-            signalingClient = null;
+            Intent stop = new Intent(this, RemotePresenceService.class)
+                    .setAction(RemotePresenceService.ACTION_STOP);
+            startService(stop);
             listening = false;
             listenButton.setText("连接云端，等待远程申请");
-            setStatus("已主动断开云端信令连接。");
+            setStatus("已请求停止设备在线服务。");
             return;
         }
-        setBusy(true);
-        executor.execute(() -> {
-            try {
-                RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
-                if (record == null) throw new IllegalStateException("本机尚未注册");
-                RemoteSignalingClient client = new RemoteSignalingClient();
-                signalingClient = client;
-                client.connect(record.serverUrl, record.deviceToken, new RemoteSignalingClient.Listener() {
-                    @Override public void onConnected() {
-                        runOnUiThread(() -> {
-                            listening = true;
-                            setBusy(false);
-                            listenButton.setText("断开云端连接");
-                            setStatus("已连接云端，正在等待远程连接申请。\\n每次申请都必须由本机主人确认。");
-                        });
-                    }
-                    @Override public void onSessionRequested(String sessionId, String requesterId, String reason) {
-                        runOnUiThread(() -> showApprovalDialog(sessionId, requesterId, reason));
-                    }
-                    @Override public void onSignal(String sessionId, org.json.JSONObject payload) {
-                        // WebRTC signaling is handled by the capture foreground service.
-                    }
-                    @Override public void onDisconnected(String message) {
-                        runOnUiThread(() -> {
-                            listening = false;
-                            listenButton.setText("连接云端，等待远程申请");
-                            setBusy(false);
-                            setStatus(message);
-                        });
-                    }
-                });
-            } catch (Exception error) {
-                runOnUiThread(() -> {
-                    listening = false;
-                    setBusy(false);
-                    setStatus("无法连接云端：" + safeMessage(error));
-                });
-            }
-        });
+        Intent start = new Intent(this, RemotePresenceService.class)
+                .setAction(RemotePresenceService.ACTION_START);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(start);
+        else startService(start);
+        listening = true;
+        listenButton.setText("断开云端连接");
+        setStatus("设备在线服务正在启动。通知栏会显示运行状态；屏幕采集仍需每次单独批准和系统授权。");
     }
 
     private void showApprovalDialog(String sessionId, String requesterId, String reason) {
+        if (sessionId == null || sessionId.isEmpty() || sessionId.equals(shownPendingSessionId)) return;
+        shownPendingSessionId = sessionId;
         new AlertDialog.Builder(this)
                 .setTitle("远程连接申请")
                 .setMessage("申请账号：" + requesterId + "\\n申请原因：" + reason + "\\n\\n是否允许本次连接？")
                 .setCancelable(false)
                 .setPositiveButton("允许本次连接", (dialog, which) -> decideSession(sessionId, true))
                 .setNegativeButton("拒绝", (dialog, which) -> decideSession(sessionId, false))
+                .setOnCancelListener(dialog -> shownPendingSessionId = null)
                 .show();
     }
 
     private void decideSession(String sessionId, boolean approve) {
+        shownPendingSessionId = null;
         executor.execute(() -> {
             try {
                 RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
@@ -317,7 +309,7 @@ public class RemoteHelperActivity extends Activity {
         deviceRegistered = false;
         heartbeatButton.setEnabled(false);
         listenButton.setEnabled(false);
-        if (signalingClient != null) { signalingClient.close(); signalingClient = null; }
+        startService(new Intent(this, RemotePresenceService.class).setAction(RemotePresenceService.ACTION_STOP));
         listening = false;
         listenButton.setText("连接云端，等待远程申请");
         setStatus("已清除本机保存的云端凭证。服务器端设备记录仍保留，需要由云端管理端另行撤销。");
@@ -352,9 +344,51 @@ public class RemoteHelperActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private void handlePendingSessionIntent(Intent intent) {
+        if (intent == null) return;
+        String sessionId = intent.getStringExtra(RemotePresenceService.EXTRA_PENDING_SESSION_ID);
+        if (sessionId == null) return;
+        showApprovalDialog(
+                sessionId,
+                intent.getStringExtra(RemotePresenceService.EXTRA_PENDING_REQUESTER_ID),
+                intent.getStringExtra(RemotePresenceService.EXTRA_PENDING_REASON));
+        intent.removeExtra(RemotePresenceService.EXTRA_PENDING_SESSION_ID);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handlePendingSessionIntent(intent);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(RemotePresenceService.ACTION_STATUS);
+        filter.addAction(RemotePresenceService.ACTION_SESSION_REQUESTED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(presenceReceiver, filter, RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(presenceReceiver, filter);
+        }
+        presenceReceiverRegistered = true;
+        startService(new Intent(this, RemotePresenceService.class)
+                .setAction(RemotePresenceService.ACTION_QUERY));
+    }
+
+    @Override
+    protected void onStop() {
+        if (presenceReceiverRegistered) {
+            unregisterReceiver(presenceReceiver);
+            presenceReceiverRegistered = false;
+        }
+        super.onStop();
+    }
+
     @Override
     protected void onDestroy() {
-        if (signalingClient != null) signalingClient.close();
         executor.shutdownNow();
         super.onDestroy();
     }
