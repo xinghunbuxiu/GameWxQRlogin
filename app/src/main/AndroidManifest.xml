@@ -18,6 +18,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Wz">
         <service
+            android:name=".RemotePresenceService"
+            android:exported="false" />
+        <service
             android:name=".RemoteCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
