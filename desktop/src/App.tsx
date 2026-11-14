@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Activity, AlertCircle, Bot, Cable, CheckCircle2, CircleHelp, Command, Gamepad2, KeyRound, LayoutDashboard, Link2, ListChecks, LoaderCircle, Monitor, MonitorSmartphone, Plus, RefreshCw, Settings2, ShieldCheck, Smartphone, TerminalSquare, Wifi } from "lucide-react";
+import { Activity, AlertCircle, Bot, Cable, CheckCircle2, CircleHelp, Command, Gamepad2, Globe2, KeyRound, LayoutDashboard, Link2, ListChecks, LoaderCircle, Monitor, MonitorSmartphone, Plus, RefreshCw, Settings2, ShieldCheck, Smartphone, TerminalSquare, Wifi } from "lucide-react";
+import RemoteSessionPanel from "./RemoteSessionPanel";
 
-type Section = "overview" | "devices" | "tasks" | "scripts" | "logs" | "settings";
+type Section = "overview" | "devices" | "remote" | "tasks" | "scripts" | "logs" | "settings";
 type AdbDevice = { serial: string; state: string; model: string | null; product: string | null; device: string | null; transportId: string | null };
 type DeviceDetails = { serial: string; model: string | null; androidVersion: string | null; screenResolution: string | null; foregroundActivity: string | null; gameInstalled: boolean; gameApkPath: string | null };
 type AdbSnapshot = { available: boolean; adbPath: string | null; version: string | null; devices: AdbDevice[]; error: string | null };
@@ -12,6 +13,7 @@ type ScrcpyStatus = { available: boolean; path: string | null; runningSerials: s
 const nav: { id: Section; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "总览", icon: LayoutDashboard },
   { id: "devices", label: "设备管理", icon: Smartphone },
+  { id: "remote", label: "云端远控", icon: Globe2 },
   { id: "tasks", label: "任务中心", icon: ListChecks },
   { id: "scripts", label: "自动化脚本", icon: Bot },
   { id: "logs", label: "运行日志", icon: TerminalSquare },
@@ -221,7 +223,7 @@ function App() {
     <main className="main">
       <header className="topbar"><div className="breadcrumb">工作空间 <span>/</span> {current.label}</div><div className="top-actions"><span className="platform"><MonitorSmartphone size={15}/> 桌面端</span><button className="icon-button" title="帮助"><CircleHelp size={18}/></button><div className="avatar">GP</div></div></header>
       <section className="content">
-        <div className="page-heading"><div><div className="eyebrow">GAMEPILOT / CONTROL CENTER</div><h1>{current.label}</h1><p>{section === "overview" ? "统一管理 Android 真机、模拟器与自动化任务。" : section === "devices" ? "扫描 USB、无线调试和模拟器 ADB 连接。" : section === "tasks" ? "创建、执行和追踪自动化任务。" : section === "scripts" ? "维护可复用的自动化流程与游戏适配器。" : section === "logs" ? "查看设备事件、任务步骤和执行结果。" : "配置连接方式、权限和运行环境。"}</p></div><button className="primary" onClick={() => section === "devices" ? void refreshDevices() : setSection("devices")} disabled={loading}>{loading ? <LoaderCircle size={16} className="spin"/> : section === "devices" ? <RefreshCw size={16}/> : <Plus size={16}/>} {section === "devices" ? "刷新设备" : "设备管理"}</button></div>
+        <div className="page-heading"><div><div className="eyebrow">GAMEPILOT / CONTROL CENTER</div><h1>{current.label}</h1><p>{section === "overview" ? "统一管理 Android 真机、模拟器与自动化任务。" : section === "devices" ? "扫描 USB、无线调试和模拟器 ADB 连接。" : section === "remote" ? "通过云端邀请、主人审批和 WebRTC 建立跨网络远程会话。" : section === "tasks" ? "创建、执行和追踪自动化任务。" : section === "scripts" ? "维护可复用的自动化流程与游戏适配器。" : section === "logs" ? "查看设备事件、任务步骤和执行结果。" : "配置连接方式、权限和运行环境。"}</p></div><button className="primary" onClick={() => section === "devices" ? void refreshDevices() : setSection("devices")} disabled={loading}>{loading ? <LoaderCircle size={16} className="spin"/> : section === "devices" ? <RefreshCw size={16}/> : <Plus size={16}/>} {section === "devices" ? "刷新设备" : "设备管理"}</button></div>
         <div className={snapshot?.error ? "notice warning" : "notice"}>{snapshot?.error ? <AlertCircle size={16}/> : <ShieldCheck size={16}/>}<span>{notice}</span></div>
         {section === "overview" ? <>
           <div className="stats-grid">
@@ -266,7 +268,7 @@ function App() {
           {snapshot?.devices.length ? <DeviceList devices={snapshot.devices} onDisconnect={disconnectWirelessDevice} onDetails={inspectDevice} onLaunch={launchTargetGame} onInstall={installTargetGame} onMirror={toggleScrcpy} runningMirrors={scrcpyStatus?.runningSerials ?? []} mirrorBusySerial={mirrorBusySerial} busy={actionBusy !== null}/> : <div className="empty-state device-empty"><div className="empty-icon"><Smartphone size={24}/></div><b>{snapshot?.available ? "没有检测到设备" : "ADB 尚不可用"}</b><span>{snapshot?.error ?? "连接手机并开启开发者选项中的 USB 调试，或按上方步骤完成无线配对和连接。"}</span></div>}
           <div className="callout"><b>投屏提示</b><span>点击设备行的「投屏控制」会启动该设备独立的 scrcpy 窗口；再次点击「停止投屏」可关闭由 GamePilot 启动的窗口。</span><span>scrcpy 官方下载源：https://github.com/Genymobile/scrcpy。无线设备沿用当前 ADB TCP/IP 连接，无需再次配对。</span></div>
           <div className="callout"><b>连接提示</b><span>USB：手机开启开发者选项和 USB 调试，连接电脑并在手机上确认 RSA 授权。</span><span>无线：配对端口与连接端口不同；先配对，再使用手机页面显示的连接端口执行连接。</span><span>安全：配对码仅用于本次配对，不持久化；所有操作均通过固定 ADB 子命令执行，不提供任意 Shell。</span></div>
-        </div> : <div className="panel section-placeholder"><div className="empty-icon">{(() => { const Icon = current.icon; return <Icon size={25}/>; })()}</div><h2>{current.label}模块</h2><p>页面骨架已建立，等待对应设备服务和数据接口接入。</p></div>}
+        </div> : section === "remote" ? <RemoteSessionPanel/> : <div className="panel section-placeholder"><div className="empty-icon">{(() => { const Icon = current.icon; return <Icon size={25}/>; })()}</div><h2>{current.label}模块</h2><p>页面骨架已建立，等待对应设备服务和数据接口接入。</p></div>}
       </section>
     </main>
   </div>;

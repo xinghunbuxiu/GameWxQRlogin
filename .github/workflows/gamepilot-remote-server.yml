@@ -1,0 +1,48 @@
+name: GamePilot Remote Server
+on:
+  push:
+    branches: [feature/gamepilot-cloud-remote-mvp]
+    paths:
+      - "cloud/server/**"
+      - ".github/workflows/gamepilot-remote-server.yml"
+  pull_request:
+    paths:
+      - "cloud/server/**"
+      - ".github/workflows/gamepilot-remote-server.yml"
+  workflow_dispatch:
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gamepilot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gamepilot_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/gamepilot_test
+    defaults:
+      run:
+        working-directory: cloud/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: node tests/run-db-invariants.mjs
+      - name: Validate Docker Compose configuration
+        run: |
+          cp .env.example .env
+          POSTGRES_PASSWORD=ci-only-random-password docker compose config --quiet
+      - name: Build production container image
+        run: docker build -t gamepilot-remote-server:ci .

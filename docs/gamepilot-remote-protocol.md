@@ -1,0 +1,65 @@
+# GamePilot Remote Protocol v0.1
+
+## Product decisions
+
+- Supported Helpers: Android and iOS.
+- Every connection requires a fresh, explicit device-owner approval.
+- Approval expires after 90 seconds.
+- The owner can reject or terminate a session at any time. After system screen-capture consent and media sender initialization, the device emits `session.ready`; only then does the viewer create and send its SDP offer. This prevents an offer from racing ahead of the device WebRTC socket.
+- The server is a control plane and signaling relay, not a remote command executor.
+
+## Identity and device registration
+
+A signed-in owner registers a Helper with platform, display name, app version, and a capability list. The server returns a random device credential exactly once. The Helper stores it in Android Keystore or iOS Keychain. Only a peppered hash is persisted by the server. To let another user request access, the owner creates a time-limited invite token; only its hash is stored. Possession of the invite permits a request, never automatic access. The owner still approves each individual session.
+
+Capabilities are descriptive and platform-specific, for example:
+- Android: `screen.capture`, `accessibility.observe`, `accessibility.actions.basic`
+- iOS: `screen.broadcast.replaykit`, `app.interaction`
+
+A capability is not a permission grant. The operating system's permission prompt and the Helper's own approval UI remain authoritative.
+
+## Session state machine
+
+```text
+pending --owner approves--> approved --device starts WebRTC--> active --either ends--> ended
+   |                              |
+   +--owner rejects--> rejected   +--timeout/device offline--> expired
+   +--90s timeout----> expired
+```
+
+The server must reject signaling unless the session is approved or active. Every state transition is auditable.
+
+## WebRTC topology
+
+- WebSocket is used only for authenticated signaling and lifecycle events. Clients obtain a single-use 30-second ticket over authenticated HTTPS, then connect with that ticket; browser WebSocket clients do not rely on custom Authorization headers.
+- WebRTC carries screen video and (where platform policy permits) a DataChannel.
+- Authenticated GET /v1/turn/credentials returns STUN and, when configured, short-lived coturn REST credentials. TURN credentials use HMAC-SHA1 with the server-side shared secret and a bounded TTL; the secret is never returned to clients.
+- Use short-lived TURN credentials; never embed permanent TURN secrets in a Helper.
+- Screen media uses WebRTC's DTLS-SRTP encryption.
+- The viewer cannot inject platform actions unless the Helper advertises and locally enables the corresponding capability.
+
+## Platform capability contract
+
+### Android Helper
+Use MediaProjection with the Android system consent flow for screen capture. Use a user-enabled AccessibilityService only for the explicitly disclosed basic accessibility actions. Do not expose arbitrary shell execution, arbitrary app-private data access, or silent background capture. The owner can stop sharing from the persistent foreground notification/system controls.
+
+### iOS Helper
+Use ReplayKit Broadcast Upload Extension and the system-mediated broadcast start flow. The Helper can support its own app UI and application-scoped actions. Third-party iOS apps cannot be remotely clicked or controlled arbitrarily by a normal App Store app. A session can therefore be view-only for other apps.
+
+## DataChannel message envelope
+
+```json
+{
+  "version": 1,
+  "sessionId": "uuid",
+  "requestId": "uuid",
+  "kind": "input.tap | input.scroll | session.stop",
+  "payload": {}
+}
+```
+
+The Helper must validate session ID, schema, capability, bounds, rate, and current owner-approved session state before acting. Unknown kinds fail closed. Do not implement a generic command or shell message.
+
+## Required production hardening
+
+Cross-account device sharing ACLs, OIDC login UX, short-lived TURN credentials, rate limits, replay protection, reconnect/resume semantics, distributed WebSocket presence, privacy indicators, retention controls, abuse reporting, and security review remain required before public deployment.
