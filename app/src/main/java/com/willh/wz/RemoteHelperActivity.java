@@ -314,10 +314,10 @@ public class RemoteHelperActivity extends Activity {
     }
 
     private void copyDiagnostics() {
-        String diagnostics = "GamePilot Android diagnostics\\n"
-                + "App version: " + BuildConfig.VERSION_NAME + "\\n"
-                + "Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\\n"
-                + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\\n\\n"
+        String diagnostics = "GamePilot Android diagnostics\n"
+                + "App version: " + BuildConfig.VERSION_NAME + "\n"
+                + "Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n"
+                + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\n\n"
                 + RemoteDiagnosticsStore.read(this);
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         clipboard.setPrimaryClip(ClipData.newPlainText("GamePilot diagnostics", diagnostics));
