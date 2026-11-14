@@ -53,16 +53,28 @@ public final class RemotePresenceService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null || ACTION_STOP.equals(intent.getAction())) {
+        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            getSharedPreferences("gamepilot_presence", MODE_PRIVATE)
+                    .edit().putBoolean("enabled", false).apply();
             stopPresence();
             return START_NOT_STICKY;
         }
-        if (ACTION_QUERY.equals(intent.getAction())) {
+        if (intent == null) {
+            boolean wasExplicitlyEnabled = getSharedPreferences("gamepilot_presence", MODE_PRIVATE)
+                    .getBoolean("enabled", false);
+            if (!wasExplicitlyEnabled) {
+                stopPresence();
+                return START_NOT_STICKY;
+            }
+        }
+        if (ACTION_QUERY.equals(intent == null ? null : intent.getAction())) {
             broadcastStatus(running.get() ? "设备在线服务运行中" : "设备在线服务未启动");
             if (!running.get()) stopSelf();
             return START_NOT_STICKY;
         }
-        if (!ACTION_START.equals(intent.getAction())) return START_NOT_STICKY;
+        if (intent != null && !ACTION_START.equals(intent.getAction())) return START_NOT_STICKY;
+        getSharedPreferences("gamepilot_presence", MODE_PRIVATE)
+                .edit().putBoolean("enabled", true).apply();
         if (running.compareAndSet(false, true)) {
             startPresenceForeground();
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
