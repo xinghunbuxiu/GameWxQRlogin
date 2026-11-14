@@ -72,6 +72,7 @@ public final class RemotePresenceService extends Service {
             });
             broadcastStatus("在线服务已启动，正在连接云端");
             scheduler.execute(this::connectSignaling);
+            scheduler.execute(this::sendHeartbeat);
             heartbeatTask = scheduler.scheduleWithFixedDelay(
                     this::sendHeartbeat, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS);
         }
