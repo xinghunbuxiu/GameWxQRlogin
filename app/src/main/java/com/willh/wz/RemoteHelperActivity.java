@@ -368,11 +368,7 @@ public class RemoteHelperActivity extends Activity {
         IntentFilter filter = new IntentFilter();
         filter.addAction(RemotePresenceService.ACTION_STATUS);
         filter.addAction(RemotePresenceService.ACTION_SESSION_REQUESTED);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(presenceReceiver, filter, RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(presenceReceiver, filter);
-        }
+        registerReceiver(presenceReceiver, filter);
         presenceReceiverRegistered = true;
         startService(new Intent(this, RemotePresenceService.class)
                 .setAction(RemotePresenceService.ACTION_QUERY));
