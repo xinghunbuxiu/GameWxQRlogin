@@ -76,6 +76,7 @@ public final class RemotePresenceService extends Service {
         getSharedPreferences("gamepilot_presence", MODE_PRIVATE)
                 .edit().putBoolean("enabled", true).apply();
         if (running.compareAndSet(false, true)) {
+            RemoteDiagnosticsStore.append(this, "presence.start requested");
             startPresenceForeground();
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread thread = new Thread(r, "GamePilotPresence");
@@ -83,6 +84,7 @@ public final class RemotePresenceService extends Service {
                 return thread;
             });
             broadcastStatus("在线服务已启动，正在连接云端");
+            RemoteDiagnosticsStore.append(this, "presence.foreground_started");
             scheduler.execute(this::connectSignaling);
             scheduler.execute(this::sendHeartbeat);
             heartbeatTask = scheduler.scheduleWithFixedDelay(
@@ -94,6 +96,7 @@ public final class RemotePresenceService extends Service {
     private void connectSignaling() {
         if (!running.get()) return;
         final int generation = connectionGeneration.incrementAndGet();
+        RemoteDiagnosticsStore.append(this, "signaling.connect_attempt generation=" + generation);
         try {
             RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
             if (record == null) throw new IllegalStateException("本机尚未注册云端设备");
@@ -106,11 +109,13 @@ public final class RemotePresenceService extends Service {
                 @Override public void onConnected() {
                     if (!running.get() || generation != connectionGeneration.get()) return;
                     reconnectDelaySeconds = INITIAL_RECONNECT_SECONDS;
+                    RemoteDiagnosticsStore.append(RemotePresenceService.this, "signaling.connected");
                     broadcastStatus("云端信令已连接，正在等待远程申请");
                 }
 
                 @Override public void onSessionRequested(String sessionId, String requesterId, String reason) {
                     if (!running.get() || generation != connectionGeneration.get()) return;
+                    RemoteDiagnosticsStore.append(RemotePresenceService.this, "session.request_received");
                     notifyOwner(sessionId, requesterId, reason);
                 }
 
@@ -121,6 +126,7 @@ public final class RemotePresenceService extends Service {
                 @Override public void onDisconnected(String message) {
                     if (!running.get() || generation != connectionGeneration.get()) return;
                     Log.w(TAG, message);
+                    RemoteDiagnosticsStore.append(RemotePresenceService.this, "signaling.disconnected: " + message);
                     broadcastStatus(message + "；将自动重连");
                     scheduleReconnect();
                 }
@@ -138,8 +144,10 @@ public final class RemotePresenceService extends Service {
             RemoteDeviceStore.DeviceRecord record = RemoteDeviceStore.load(this);
             if (record == null) throw new IllegalStateException("设备凭证不存在");
             RemoteApiClient.heartbeat(record.serverUrl, record.deviceToken);
+            RemoteDiagnosticsStore.append(this, "heartbeat.ok");
         } catch (Exception error) {
             Log.w(TAG, "Device heartbeat failed", error);
+            RemoteDiagnosticsStore.append(this, "heartbeat.failed: " + safeMessage(error));
             broadcastStatus("在线心跳失败：" + safeMessage(error));
         }
     }
@@ -148,11 +156,13 @@ public final class RemotePresenceService extends Service {
         if (!running.get() || scheduler == null || scheduler.isShutdown()) return;
         if (reconnectTask != null && !reconnectTask.isDone()) return;
         long delay = reconnectDelaySeconds;
+        RemoteDiagnosticsStore.append(this, "signaling.reconnect_scheduled delay_seconds=" + delay);
         reconnectDelaySeconds = Math.min(MAX_RECONNECT_SECONDS, reconnectDelaySeconds * 2L);
         reconnectTask = scheduler.schedule(this::connectSignaling, delay, TimeUnit.SECONDS);
     }
 
     private void notifyOwner(String sessionId, String requesterId, String reason) {
+        RemoteDiagnosticsStore.append(this, "owner.notification_posted");
         Intent tapIntent = new Intent(this, RemoteHelperActivity.class)
                 .putExtra(EXTRA_PENDING_SESSION_ID, sessionId)
                 .putExtra(EXTRA_PENDING_REQUESTER_ID, requesterId)
@@ -228,6 +238,7 @@ public final class RemotePresenceService extends Service {
             stopSelf();
             return;
         }
+        RemoteDiagnosticsStore.append(this, "presence.stop");
         connectionGeneration.incrementAndGet();
         if (heartbeatTask != null) heartbeatTask.cancel(true);
         if (reconnectTask != null) reconnectTask.cancel(true);
