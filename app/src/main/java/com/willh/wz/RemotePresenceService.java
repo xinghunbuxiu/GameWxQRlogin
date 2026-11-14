@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class RemotePresenceService extends Service {
     public static final String ACTION_START = "com.willh.wz.action.START_REMOTE_PRESENCE";
     public static final String ACTION_STOP = "com.willh.wz.action.STOP_REMOTE_PRESENCE";
+    public static final String ACTION_QUERY = "com.willh.wz.action.QUERY_REMOTE_PRESENCE";
     public static final String ACTION_STATUS = "com.willh.wz.action.REMOTE_PRESENCE_STATUS";
     public static final String ACTION_SESSION_REQUESTED = "com.willh.wz.action.REMOTE_SESSION_REQUESTED";
     public static final String EXTRA_RUNNING = "presence_running";
@@ -54,6 +55,11 @@ public final class RemotePresenceService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null || ACTION_STOP.equals(intent.getAction())) {
             stopPresence();
+            return START_NOT_STICKY;
+        }
+        if (ACTION_QUERY.equals(intent.getAction())) {
+            broadcastStatus(running.get() ? "设备在线服务运行中" : "设备在线服务未启动");
+            if (!running.get()) stopSelf();
             return START_NOT_STICKY;
         }
         if (!ACTION_START.equals(intent.getAction())) return START_NOT_STICKY;
