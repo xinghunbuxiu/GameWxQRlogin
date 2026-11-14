@@ -61,6 +61,7 @@ public class RemoteCaptureService extends Service {
             return START_NOT_STICKY;
         }
 
+        RemoteDiagnosticsStore.append(this, "capture.start approved_session");
         startCaptureForeground();
         connectSignalingAndStartWebRtc();
         return START_NOT_STICKY;
@@ -107,9 +108,11 @@ public class RemoteCaptureService extends Service {
                 signalingClient = client;
                 client.connect(record.serverUrl, record.deviceToken, new RemoteSignalingClient.Listener() {
                     @Override public void onConnected() {
+                        RemoteDiagnosticsStore.append(RemoteCaptureService.this, "capture.signaling.connected");
                         new Thread(() -> {
                             try {
                                 List<PeerConnection.IceServer> iceServers = RemoteApiClient.getIceServers(record.serverUrl, record.deviceToken);
+                                RemoteDiagnosticsStore.append(RemoteCaptureService.this, "capture.ice_servers.loaded count=" + iceServers.size());
                                 mainHandler.post(() -> {
                                     if (stopping.get()) return;
                                     DisplayMetrics metrics = getResources().getDisplayMetrics();
@@ -122,6 +125,7 @@ public class RemoteCaptureService extends Service {
                                             client,
                                             new RemoteWebRtcSession.Listener() {
                                                 @Override public void onReady() {
+                                                    RemoteDiagnosticsStore.append(RemoteCaptureService.this, "capture.webrtc.ready");
                                                     if (!client.sendSessionReady(sessionId)) stopCapture(true);
                                                 }
                                                 @Override public void onConnected() {
@@ -131,10 +135,12 @@ public class RemoteCaptureService extends Service {
                                                             return;
                                                         }
                                                         sessionStarted = true;
+                                                        RemoteDiagnosticsStore.append(RemoteCaptureService.this, "capture.webrtc.connected");
                                                         Log.i(TAG, "WebRTC screen session connected");
                                                     }
                                                 }
                                                 @Override public void onFailure(String message) {
+                                                    RemoteDiagnosticsStore.append(RemoteCaptureService.this, "capture.webrtc.failed: " + message);
                                                     Log.w(TAG, message);
                                                     stopCapture(true);
                                                 }
@@ -147,6 +153,7 @@ public class RemoteCaptureService extends Service {
                                     new Thread(() -> webRtcSession.start(), "GamePilotWebRtcStart").start();
                                 });
                             } catch (Exception error) {
+                                RemoteDiagnosticsStore.append(RemoteCaptureService.this, "capture.ice_servers.failed: " + error.getClass().getSimpleName());
                                 Log.e(TAG, "Unable to obtain ICE server configuration", error);
                                 stopCapture(true);
                             }
@@ -164,11 +171,13 @@ public class RemoteCaptureService extends Service {
                     }
 
                     @Override public void onDisconnected(String message) {
+                        RemoteDiagnosticsStore.append(RemoteCaptureService.this, "capture.signaling.disconnected: " + message);
                         Log.w(TAG, message);
                         stopCapture(true);
                     }
                 });
             } catch (Exception error) {
+                RemoteDiagnosticsStore.append(RemoteCaptureService.this, "capture.signaling.failed: " + error.getClass().getSimpleName());
                 Log.e(TAG, "Unable to connect signaling for approved session", error);
                 stopCapture(true);
             }
@@ -181,6 +190,7 @@ public class RemoteCaptureService extends Service {
 
     private void stopCaptureOnMain(boolean endRemoteSession) {
         if (!stopping.compareAndSet(false, true)) return;
+        RemoteDiagnosticsStore.append(this, "capture.stop requested");
         final String endedSession = sessionId;
         sessionId = null;
 
