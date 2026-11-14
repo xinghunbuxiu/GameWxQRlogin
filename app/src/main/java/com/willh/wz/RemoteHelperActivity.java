@@ -5,6 +5,8 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.BroadcastReceiver;
 import android.content.IntentFilter;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.graphics.Typeface;
@@ -16,6 +18,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,6 +57,7 @@ public class RemoteHelperActivity extends Activity {
     private static final int REQUEST_SCREEN_CAPTURE = 7401;
     private String approvedSessionId;
     private Button clearButton;
+    private Button diagnosticsButton;
     private boolean deviceRegistered;
 
     @Override
@@ -109,6 +113,11 @@ public class RemoteHelperActivity extends Activity {
         clearButton.setText("解除本机云端绑定");
         root.addView(clearButton);
         clearButton.setOnClickListener(v -> clearDevice());
+
+        diagnosticsButton = new Button(this);
+        diagnosticsButton.setText("复制远程诊断日志");
+        root.addView(diagnosticsButton);
+        diagnosticsButton.setOnClickListener(v -> copyDiagnostics());
 
         statusView = new TextView(this);
         statusView.setTextSize(14);
@@ -199,7 +208,7 @@ public class RemoteHelperActivity extends Activity {
         shownPendingSessionId = sessionId;
         new AlertDialog.Builder(this)
                 .setTitle("远程连接申请")
-                .setMessage("申请账号：" + requesterId + "\\n申请原因：" + reason + "\\n\\n是否允许本次连接？")
+                .setMessage("申请账号：" + requesterId + "\n申请原因：" + reason + "\n\n是否允许本次连接？")
                 .setCancelable(false)
                 .setPositiveButton("允许本次连接", (dialog, which) -> decideSession(sessionId, true))
                 .setNegativeButton("拒绝", (dialog, which) -> decideSession(sessionId, false))
@@ -302,6 +311,13 @@ public class RemoteHelperActivity extends Activity {
                 runOnUiThread(() -> setStatus("读取本机凭证失败：" + safeMessage(error)));
             }
         });
+    }
+
+    private void copyDiagnostics() {
+        String diagnostics = RemoteDiagnosticsStore.read(this);
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        clipboard.setPrimaryClip(ClipData.newPlainText("GamePilot diagnostics", diagnostics));
+        Toast.makeText(this, "诊断日志已复制；内容不包含设备令牌或账号 JWT。", Toast.LENGTH_LONG).show();
     }
 
     private void clearDevice() {
