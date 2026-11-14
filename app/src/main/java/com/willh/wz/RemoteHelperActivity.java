@@ -314,7 +314,11 @@ public class RemoteHelperActivity extends Activity {
     }
 
     private void copyDiagnostics() {
-        String diagnostics = RemoteDiagnosticsStore.read(this);
+        String diagnostics = "GamePilot Android diagnostics\\n"
+                + "App version: " + BuildConfig.VERSION_NAME + "\\n"
+                + "Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\\n"
+                + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\\n\\n"
+                + RemoteDiagnosticsStore.read(this);
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         clipboard.setPrimaryClip(ClipData.newPlainText("GamePilot diagnostics", diagnostics));
         Toast.makeText(this, "诊断日志已复制；内容不包含设备令牌或账号 JWT。", Toast.LENGTH_LONG).show();
