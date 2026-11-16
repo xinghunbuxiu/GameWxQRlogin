@@ -15,6 +15,17 @@ type TicketResponse = { ticket: string };
 type SignalPayload =
   | { kind: "offer" | "answer"; data: string }
   | { kind: "ice"; data: { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null } };
+type OcrBlock = { text: string; left: number; top: number; right: number; bottom: number };
+type OcrResult = {
+  type: "ocr.result";
+  version: 1;
+  sequence: number;
+  capturedAt: number;
+  width: number;
+  height: number;
+  rotation: number;
+  blocks: OcrBlock[];
+};
 
 export default function RemoteSessionPanel() {
   const [serverUrl, setServerUrl] = useState("https://remote.example.com");
@@ -29,9 +40,12 @@ export default function RemoteSessionPanel() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [streamReady, setStreamReady] = useState(false);
+  const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
+  const [ocrChannelState, setOcrChannelState] = useState("等待协商");
   const videoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
+  const ocrChannelRef = useRef<RTCDataChannel | null>(null);
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
   const sessionRef = useRef<string | null>(null);
 
@@ -104,10 +118,13 @@ export default function RemoteSessionPanel() {
       peer.onicecandidate = null;
       peer.close();
     }
+    ocrChannelRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     pendingIceRef.current = [];
     setConnected(false);
     setStreamReady(false);
+    setOcrResult(null);
+    setOcrChannelState("已断开");
   };
 
   const stopSession = async (notifyServer: boolean) => {
@@ -132,6 +149,27 @@ export default function RemoteSessionPanel() {
       ? "设备主人已批准，TURN 临时凭证已就绪，正在协商 WebRTC…"
       : "设备主人已批准，当前使用 STUN 直连；服务器尚未配置 TURN 中继。");
     peerRef.current = peer;
+    // Create the ordered OCR DataChannel before createOffer so it is negotiated
+    // in the same SDP exchange as the screen video track.
+    const ocrChannel = peer.createDataChannel("gamepilot-ocr", { ordered: true });
+    ocrChannelRef.current = ocrChannel;
+    setOcrChannelState("正在协商");
+    ocrChannel.onopen = () => setOcrChannelState("已连接");
+    ocrChannel.onclose = () => setOcrChannelState("已关闭");
+    ocrChannel.onerror = () => setOcrChannelState("连接错误");
+    ocrChannel.onmessage = event => {
+      try {
+        const parsed = JSON.parse(String(event.data)) as OcrResult;
+        if (parsed.type !== "ocr.result" || parsed.version !== 1 || !Array.isArray(parsed.blocks)) return;
+        const blocks = parsed.blocks.slice(0, 80).filter(block =>
+          typeof block.text === "string" &&
+          [block.left, block.top, block.right, block.bottom].every(Number.isFinite)
+        );
+        setOcrResult({ ...parsed, blocks });
+      } catch {
+        // Ignore malformed OCR data; it must not affect the video session.
+      }
+    };
     peer.addTransceiver("video", { direction: "recvonly" });
     peer.ontrack = event => {
       const stream = event.streams[0];
@@ -299,6 +337,28 @@ export default function RemoteSessionPanel() {
         {!streamReady && <div className="remote-video-empty"><VideoOff size={30}/><b>暂无远程画面</b><span>主人批准后将开始 WebRTC 媒体协商。</span></div>}
       </div>
       <div className="remote-video-footer"><span>信令：WSS</span><span>媒体：WebRTC / DTLS-SRTP</span><span>网络：STUN + 临时 TURN 凭证</span></div>
+      <div className="remote-ocr-panel" style={{ marginTop: 16, padding: 16, border: "1px solid var(--border, #2b3442)", borderRadius: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div><h3 style={{ margin: 0 }}>实时 OCR</h3><small style={{ opacity: 0.7 }}>Android 中文文字识别 · P2P DataChannel</small></div>
+          <span className="state-pill">{ocrChannelState}</span>
+        </div>
+        {!ocrResult ? <p style={{ opacity: 0.65, marginBottom: 0 }}>等待设备发送第一帧识别结果…</p> : <>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", opacity: 0.7, fontSize: 12, marginTop: 10 }}>
+            <span>帧 #{ocrResult.sequence}</span>
+            <span>{ocrResult.width} × {ocrResult.height}</span>
+            <span>{new Date(ocrResult.capturedAt).toLocaleTimeString()}</span>
+            <span>{ocrResult.blocks.length} 个文本区域</span>
+          </div>
+          <div style={{ display: "grid", gap: 8, marginTop: 12, maxHeight: 260, overflow: "auto" }}>
+            {ocrResult.blocks.length === 0 ? <span style={{ opacity: 0.65 }}>当前画面未识别到文字</span> : ocrResult.blocks.map((block, index) =>
+              <div key={index} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 12, padding: "8px 10px", borderRadius: 8, background: "var(--surface-secondary, rgba(127,127,127,.08))" }}>
+                <span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{block.text}</span>
+                <small style={{ opacity: 0.6, whiteSpace: "nowrap" }}>({block.left},{block.top})–({block.right},{block.bottom})</small>
+              </div>
+            )}
+          </div>
+        </>}
+      </div>
     </div>
   </div>;
 }
