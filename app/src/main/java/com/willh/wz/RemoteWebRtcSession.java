@@ -155,7 +155,7 @@ public final class RemoteWebRtcSession {
 
             // OCR consumes the exact same authorized screen frames as WebRTC video.
             // Its output is sent on a negotiated peer-to-peer DataChannel, not via cloud signaling.
-            ocrProcessor = new RemoteOcrProcessor();
+            ocrProcessor = new RemoteOcrProcessor(context);
             videoTrack.addSink(ocrProcessor);
             if (ocrDataChannel != null) ocrProcessor.setDataChannel(ocrDataChannel);
 
