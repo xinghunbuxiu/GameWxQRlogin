@@ -82,11 +82,8 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
         //  设置缓存规则
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setDomStorageEnabled(true);
-        String appCachePath = getApplicationContext().getCacheDir()
-                .getAbsolutePath() + "/BrowserCache/";
-        settings.setAppCachePath(appCachePath);
+        // WebView AppCache was removed from the Android API; DOM storage remains enabled.
         settings.setAllowFileAccess(true);
-        settings.setAppCacheEnabled(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setJavaScriptEnabled(true);
         settings.setUserAgentString("Mozilla/5.0 (Linux; Android 7.0; Mi-4c Build/NRD90M; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/53.0.2785.49 Mobile MQQBrowser/6.2 TBS/043632 Safari/537.36 MicroMessenger/6.6.1.1220(0x26060135) NetType/WIFI Language/zh_CN MicroMessenger/6.6.1.1220(0x26060135) NetType/WIFI Language/zh_CN miniProgram");
