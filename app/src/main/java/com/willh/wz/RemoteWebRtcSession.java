@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import org.json.JSONObject;
+import org.webrtc.DataChannel;
 import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
@@ -52,6 +53,8 @@ public final class RemoteWebRtcSession {
     private SurfaceTextureHelper surfaceTextureHelper;
     private VideoSource videoSource;
     private VideoTrack videoTrack;
+    private RemoteOcrProcessor ocrProcessor;
+    private DataChannel ocrDataChannel;
     private boolean remoteDescriptionSet;
     private boolean released;
     private final Handler connectionHandler = new Handler(Looper.getMainLooper());
@@ -93,7 +96,14 @@ public final class RemoteWebRtcSession {
                 @Override public void onIceCandidatesRemoved(IceCandidate[] candidates) {}
                 @Override public void onAddStream(org.webrtc.MediaStream stream) {}
                 @Override public void onRemoveStream(org.webrtc.MediaStream stream) {}
-                @Override public void onDataChannel(org.webrtc.DataChannel channel) {}
+                @Override public void onDataChannel(DataChannel channel) {
+                    if ("gamepilot-ocr".equals(channel.label())) {
+                        ocrDataChannel = channel;
+                        if (ocrProcessor != null) ocrProcessor.setDataChannel(channel);
+                    } else {
+                        channel.close();
+                    }
+                }
                 @Override public void onRenegotiationNeeded() {}
 
                 @Override public void onIceConnectionChange(PeerConnection.IceConnectionState state) {
@@ -142,6 +152,13 @@ public final class RemoteWebRtcSession {
             screenCapturer.initialize(surfaceTextureHelper, context, videoSource.getCapturerObserver());
             videoTrack = factory.createVideoTrack("gamepilot-screen-track", videoSource);
             peerConnection.addTrack(videoTrack, Collections.singletonList("gamepilot-screen"));
+
+            // OCR consumes the exact same authorized screen frames as WebRTC video.
+            // Its output is sent on a negotiated peer-to-peer DataChannel, not via cloud signaling.
+            ocrProcessor = new RemoteOcrProcessor();
+            videoTrack.addSink(ocrProcessor);
+            if (ocrDataChannel != null) ocrProcessor.setDataChannel(ocrDataChannel);
+
             screenCapturer.startCapture(width, height, fps);
             listener.onReady();
         } catch (Exception error) {
@@ -226,6 +243,9 @@ public final class RemoteWebRtcSession {
         if (released) return;
         released = true;
         connectionHandler.removeCallbacks(disconnectedTimeout);
+        if (videoTrack != null && ocrProcessor != null) videoTrack.removeSink(ocrProcessor);
+        if (ocrProcessor != null) { ocrProcessor.release(); ocrProcessor = null; }
+        if (ocrDataChannel != null) { ocrDataChannel.close(); ocrDataChannel.dispose(); ocrDataChannel = null; }
         if (screenCapturer != null) {
             try { screenCapturer.stopCapture(); } catch (Exception ignored) { Thread.currentThread().interrupt(); }
             screenCapturer.dispose();
