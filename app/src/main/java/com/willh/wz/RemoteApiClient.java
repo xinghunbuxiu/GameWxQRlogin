@@ -1,0 +1,145 @@
+package com.willh.wz;
+
+import org.json.JSONObject;
+import org.json.JSONArray;
+import org.webrtc.PeerConnection;
+
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+/** HTTPS-only API client for the GamePilot remote control plane. */
+public final class RemoteApiClient {
+    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+    private static final OkHttpClient HTTP = new OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build();
+
+    private RemoteApiClient() {}
+
+    public static final class Registration {
+        public final String deviceId;
+        public final String deviceToken;
+
+        Registration(String deviceId, String deviceToken) {
+            this.deviceId = deviceId;
+            this.deviceToken = deviceToken;
+        }
+    }
+
+    public static Registration register(String serverUrl, String ownerJwt, String displayName, String appVersion) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("displayName", displayName);
+        body.put("platform", "android");
+        body.put("appVersion", appVersion);
+        body.put("capabilities", new org.json.JSONArray()
+                .put("device.heartbeat")
+                .put("session.owner_approval")
+                .put("screen.capture.media_projection"));
+
+        JSONObject result = post(serverUrl, "/v1/devices/register", ownerJwt, body);
+        return new Registration(result.getString("deviceId"), result.getString("deviceToken"));
+    }
+
+    public static List<PeerConnection.IceServer> getIceServers(String serverUrl, String deviceToken) throws Exception {
+        JSONObject result = get(serverUrl, "/v1/turn/credentials", deviceToken);
+        JSONArray servers = result.getJSONArray("iceServers");
+        List<PeerConnection.IceServer> iceServers = new ArrayList<>();
+        for (int i = 0; i < servers.length(); i++) {
+            JSONObject server = servers.getJSONObject(i);
+            JSONArray urls = server.getJSONArray("urls");
+            String username = server.optString("username", "");
+            String credential = server.optString("credential", "");
+            for (int j = 0; j < urls.length(); j++) {
+                PeerConnection.IceServer.Builder builder = PeerConnection.IceServer.builder(urls.getString(j));
+                if (!username.isEmpty()) builder.setUsername(username);
+                if (!credential.isEmpty()) builder.setPassword(credential);
+                iceServers.add(builder.createIceServer());
+            }
+        }
+        if (iceServers.isEmpty()) throw new IllegalStateException("服务器没有返回 ICE 服务配置");
+        return iceServers;
+    }
+
+    private static JSONObject get(String serverUrl, String path, String bearer) throws Exception {
+        String base = normalizeServerUrl(serverUrl);
+        Request request = new Request.Builder()
+                .url(base + path)
+                .header("Authorization", "Bearer " + bearer)
+                .get()
+                .build();
+        try (Response response = HTTP.newCall(request).execute()) {
+            String payload = response.body() == null ? "" : response.body().string();
+            if (!response.isSuccessful()) throw new IllegalStateException("服务器请求失败：HTTP_" + response.code());
+            return new JSONObject(payload);
+        }
+    }
+
+    public static String createRealtimeTicket(String serverUrl, String deviceToken) throws Exception {
+        JSONObject result = post(serverUrl, "/v1/realtime/ticket", deviceToken, new JSONObject());
+        return result.getString("ticket");
+    }
+
+    public static void endSession(String serverUrl, String deviceToken, String sessionId) throws Exception {
+        post(serverUrl, "/v1/sessions/" + sessionId + "/end", deviceToken, new JSONObject());
+    }
+
+    public static void decideSession(String serverUrl, String deviceToken, String sessionId, boolean approve) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("decision", approve ? "approve" : "reject");
+        post(serverUrl, "/v1/sessions/" + sessionId + "/decision", deviceToken, body);
+    }
+
+    public static void heartbeat(String serverUrl, String deviceToken) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("status", "online");
+        post(serverUrl, "/v1/devices/heartbeat", deviceToken, body);
+    }
+
+    private static JSONObject post(String serverUrl, String path, String bearer, JSONObject body) throws Exception {
+        String base = normalizeServerUrl(serverUrl);
+        Request request = new Request.Builder()
+                .url(base + path)
+                .header("Authorization", "Bearer " + bearer)
+                .post(RequestBody.create(body.toString(), JSON))
+                .build();
+
+        try (Response response = HTTP.newCall(request).execute()) {
+            String payload = response.body() == null ? "" : response.body().string();
+            if (!response.isSuccessful()) {
+                String code = "HTTP_" + response.code();
+                try {
+                    JSONObject error = new JSONObject(payload);
+                    if (error.has("error")) code = error.getString("error");
+                } catch (Exception ignored) {}
+                throw new IllegalStateException("服务器请求失败：" + code);
+            }
+            return payload.isEmpty() ? new JSONObject() : new JSONObject(payload);
+        }
+    }
+
+    public static String normalizeServerUrl(String value) throws Exception {
+        String candidate = value == null ? "" : value.trim().replaceAll("/+$", "");
+        URI uri = new URI(candidate);
+        if (!"https".equalsIgnoreCase(uri.getScheme())
+                || uri.getHost() == null
+                || uri.getUserInfo() != null
+                || uri.getQuery() != null
+                || uri.getFragment() != null) {
+            throw new IllegalArgumentException("服务器地址必须是有效的 HTTPS 地址");
+        }
+        return candidate;
+    }
+}

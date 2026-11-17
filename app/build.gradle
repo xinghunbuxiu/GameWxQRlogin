@@ -3,14 +3,14 @@ plugins {
 }
 
 android {
-    compileSdk 31
+    compileSdk 33
 
     defaultConfig {
         applicationId "com.willh.wz"
-        minSdk 21
+        minSdk 23
         targetSdk 31
-        versionCode 15
-        versionName "1.5.1"
+        versionCode 16
+        versionName "1.6.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -30,4 +30,7 @@ android {
 }
 
 dependencies {
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'io.github.webrtc-sdk:android:150.7871.04'
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
 }

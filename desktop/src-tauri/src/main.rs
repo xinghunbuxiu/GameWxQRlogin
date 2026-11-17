@@ -38,6 +38,8 @@ struct AdbDeviceDetails {
     game_apk_path: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AdbSnapshot {
     available: bool,
     adb_path: Option<String>,

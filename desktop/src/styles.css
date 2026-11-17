@@ -51,3 +51,28 @@
 
 
 .mirror-button{display:inline-flex;align-items:center;gap:5px;margin-left:8px;border:1px solid #356b78;background:#172f39;color:#8ed7e4;border-radius:6px;padding:6px 10px;font:inherit;font-size:9px;white-space:nowrap;cursor:pointer}.mirror-button:hover{background:#20404b}.mirror-button.active{border-color:#795a36;background:#382b1d;color:#e7bd7e}.mirror-button:disabled{opacity:.45;cursor:wait}
+
+
+.remote-workspace{display:grid;grid-template-columns:minmax(320px,.82fr) minmax(420px,1.18fr);gap:16px;align-items:start}
+.remote-column{display:grid;gap:16px;min-width:0}
+.remote-panel,.remote-video-panel{padding:18px}
+.remote-panel>.panel-title,.remote-video-panel>.panel-title{margin-bottom:16px}
+.remote-panel label{display:block;color:#91a0b7;font-size:11px;margin:13px 0 6px}
+.remote-panel input,.remote-panel select{width:100%;height:38px;background:#0d1521;border:1px solid #2a374b;border-radius:6px;color:#dce6f5;padding:0 10px;font:inherit;font-size:11px;outline:none}
+.remote-panel input:focus,.remote-panel select:focus{border-color:#4d83d8}
+.remote-panel>.secondary,.remote-panel>.primary{margin-top:13px}
+.invite-token{margin-top:14px;padding:12px;border:1px solid #31523f;background:#12251e;border-radius:7px;display:grid;gap:8px}
+.invite-token b{font-size:11px;color:#a8d8bb}
+.invite-token code{font-size:10px;line-height:1.6;overflow-wrap:anywhere;color:#d4eadc;user-select:all}
+.invite-token small{color:#779b86;font-size:10px}
+.invite-token .text-button{justify-self:start}
+.remote-status{display:flex;align-items:flex-start;gap:9px;margin-top:14px;padding:11px;border-radius:7px;background:#0d1521;color:#aab8cc;font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+.remote-status .status-dot{margin-top:5px;flex-shrink:0}
+.remote-video-panel{min-width:0}
+.remote-video-stage{position:relative;min-height:360px;aspect-ratio:16/10;background:#080d14;border:1px solid #263346;border-radius:8px;overflow:hidden;display:grid;place-items:center}
+.remote-video-stage video{width:100%;height:100%;object-fit:contain;position:absolute;inset:0}
+.remote-video-empty{display:flex;flex-direction:column;align-items:center;gap:10px;color:#708098;z-index:1;text-align:center;padding:20px}
+.remote-video-empty b{font-size:13px;color:#aab8cb}
+.remote-video-empty span{font-size:10px}
+.remote-video-footer{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;color:#72819a;font-size:10px}
+@media(max-width:1120px){.remote-workspace{grid-template-columns:1fr}.remote-video-stage{min-height:280px}}

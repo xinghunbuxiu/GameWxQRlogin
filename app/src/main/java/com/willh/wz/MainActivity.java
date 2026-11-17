@@ -82,11 +82,8 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
         //  设置缓存规则
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setDomStorageEnabled(true);
-        String appCachePath = getApplicationContext().getCacheDir()
-                .getAbsolutePath() + "/BrowserCache/";
-        settings.setAppCachePath(appCachePath);
+        // WebView AppCache was removed from the Android API; DOM storage remains enabled.
         settings.setAllowFileAccess(true);
-        settings.setAppCacheEnabled(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setJavaScriptEnabled(true);
         settings.setUserAgentString("Mozilla/5.0 (Linux; Android 7.0; Mi-4c Build/NRD90M; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/53.0.2785.49 Mobile MQQBrowser/6.2 TBS/043632 Safari/537.36 MicroMessenger/6.6.1.1220(0x26060135) NetType/WIFI Language/zh_CN MicroMessenger/6.6.1.1220(0x26060135) NetType/WIFI Language/zh_CN miniProgram");
@@ -185,12 +182,16 @@ public class MainActivity extends Activity implements MenuDialogFragment.MenuCli
         getMenuInflater().inflate(R.menu.main, menu);
         mRefreshItem = menu.findItem(R.id.refresh);
         menu.add(Menu.NONE, 9001, 100, "自定义游戏诊断");
+        menu.add(Menu.NONE, 9002, 101, "GamePilot 远程设备");
         return super.onCreateOptionsMenu(menu);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == 9001) {
+        if (item.getItemId() == 9002) {
+            startActivity(new Intent(this, RemoteHelperActivity.class));
+            return true;
+        } else if (item.getItemId() == 9001) {
             startActivity(new Intent(this, GameDiagnosticsActivity.class));
             return true;
         } else if (item.getItemId() == R.id.refresh) {
